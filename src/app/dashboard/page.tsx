@@ -36,56 +36,49 @@ export default function Dashboard() {
   const [events, setEvents] = useState<any[]>([]);
   const [installments, setInstallments] = useState<any[]>([]);
 
+  // Reusable fetcher with error handling
+  const fetchData = async (url: string, setState: Function, label: string) => {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setState(data);
+      } else {
+        console.error(`Fetched ${label} data is not an array:`, data);
+        setState([]);
+      }
+    } catch (err) {
+      console.error(`Error fetching ${label}:`, err);
+      setState([]);
+    }
+  };
+
   useEffect(() => {
-    // Fetch student data
-    fetch('/api/records')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setStudents(data);
-        } else {
-          setStudents([]);
-          console.error('Fetched students data is not an array:', data);
-        }
-      });
-
-    // Fetch transaction data
-    fetch('/api/transactions')
-      .then(res => res.json())
-      .then(data => setTransactions(data));
-
-    // Fetch events data
-    fetch('/api/events')
-      .then(res => res.json())
-      .then(data => setEvents(data));
-
-    // Fetch installments data
-    fetch('/api/installments')
-      .then(res => res.json())
-      .then(data => setInstallments(data));
+    fetchData('/api/records', setStudents, 'students');
+    fetchData('/api/transactions', setTransactions, 'transactions');
+    fetchData('/api/events', setEvents, 'events');
+    fetchData('/api/installments', setInstallments, 'installments');
   }, []);
 
   // Process Data
-  const courses = Array.isArray(students) ? [...new Set(students.map(s => s.course))] : [];
-  const paidByCourse = Array.isArray(courses) ? courses.map(course =>
+  const courses = [...new Set(students.map(s => s.course))];
+  const paidByCourse = courses.map(course =>
     transactions.filter(t => t.status === 'paid' && t.course === course).length
-  ) : [];
+  );
 
   const yearLevels = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
-  const yearData = Array.isArray(students) ? yearLevels.map(year =>
+  const yearData = yearLevels.map(year =>
     students.filter(s => s.year === year).length
-  ) : [];
+  );
 
   const semesters = ['1st Semester', '2nd Semester'];
-  const semesterData = Array.isArray(transactions) ? semesters.map(sem =>
+  const semesterData = semesters.map(sem =>
     transactions.filter(t => t.semester === sem && t.status === 'paid').length
-  ) : [];
+  );
 
-  // Calculate total paid and unpaid
   const totalPaid = transactions.filter(t => t.status === 'paid').length;
-  const totalUnpaid = students.length - totalPaid;  // Assuming students.length represents the total student count
+  const totalUnpaid = students.length - totalPaid;
 
-  // Prepare chart data
   const paidData = {
     labels: ['Paid', 'Unpaid'],
     datasets: [
@@ -117,16 +110,13 @@ export default function Dashboard() {
     },
   };
 
-  // Calculate total money collected
   const totalMoneyCollected = transactions.reduce((sum, t) => t.status === 'paid' ? sum + t.amount : sum, 0);
 
-  // Calculate students per year level
   const studentsPerYearLevel = yearLevels.map(year => ({
     year,
     count: students.filter(s => s.year === year).length,
   }));
 
-  // Calculate students per semester
   const studentsPerSemester = semesters.map(sem => ({
     semester: sem,
     count: transactions.filter(t => t.semester === sem && t.status === 'paid').length,
