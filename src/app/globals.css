@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --background: linear-gradient(-45deg, #00BF63, #00E6A1, #009E50, #00BF63);
+  --foreground: #171717;
+  --font-sans: 'Geist Sans', Arial, Helvetica, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: black;
+    --foreground: white;
+  }
+}
+
+.animated-bg {
+  background: linear-gradient(-47deg, #00BF63, #005C2F, #009E50, #00BF63);
+  background-size: 400% 400%;
+  animation: gradientBG 10s ease infinite;
+}
+
+.text-glow {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.363),
+               0 0 16px rgba(39, 38, 38, 0.514),
+               0 0 24px rgba(255, 255, 0, 0.61);
+}
+
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+:root {
+  --font-geist-sans: 'Geist Sans', sans-serif;
+  --font-geist-mono: 'Geist Mono', monospace;
+}
+
+html,
+body {
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.8s ease-out;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
