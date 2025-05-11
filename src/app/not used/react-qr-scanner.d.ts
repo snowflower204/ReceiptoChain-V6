@@ -1,3 +1,4 @@
+{/*
 declare module 'react-qr-scanner' {
     import * as React from 'react';
   
@@ -13,6 +14,6 @@ declare module 'react-qr-scanner' {
     const QrReader: React.FC<QrReaderProps>;
     export default QrReader;
   }
-  
+  */}
 
   
