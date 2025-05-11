@@ -61,6 +61,7 @@ export async function GET(request) {
         event e ON t.eventID = e.eventID
       JOIN
         installments i ON t.installmentID = i.installmentID
+      WHERE 1=1
     `;
 
     // Apply filters to the query
@@ -80,7 +81,7 @@ export async function GET(request) {
     // Execute the query
     const [rows] = await connection.execute(sqlQuery);
 
-    return NextResponse.json(rows);
+    return NextResponse.json({ success: true, transactions: rows });
   } catch (error) {
     console.error("Database error:", error);
     return NextResponse.json(

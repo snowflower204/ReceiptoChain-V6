@@ -48,47 +48,54 @@ const TransactionsPage = () => {
   const searchParams = useSearchParams();
   const studentID = searchParams.get('studentID') || 'All';
 
-    useEffect(() => {
-  const fetchAll = async () => {
-    try {
-      setLoading(true);
-      const [tx, st, ev] = await Promise.all([
-        fetch('/api/transactions').then(res => res.json()),
-        fetch('/api/records').then(res => res.json()),
-        fetch('/api/events').then(res => res.json())
-      ]);
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        setLoading(true);
+        const [tx, st, ev] = await Promise.all([
+          fetch('/api/transactions').then(res => res.json()),
+          fetch('/api/records').then(res => res.json()),
+          fetch('/api/events').then(res => res.json())
+        ]);
 
-      console.log("Transactions Data:", tx);  // Log the raw data for debugging
+        console.log('Transactions Data:', tx); // Log the raw data for debugging
 
-      // Check if data returned is valid and an array
-      if (tx.success && Array.isArray(tx.transactions)) {
-        setTransactions(tx.transactions);
-      } else {
-        throw new Error("Invalid transactions data");
+        // Check if data returned is valid and an array
+        if (tx.success && Array.isArray(tx.transactions)) {
+          // Map backend eventTitle and eventAmount to eventList for each transaction
+          const mappedTransactions = tx.transactions.map((transaction: any) => {
+            const eventList = [{
+              title: transaction.eventTitle,
+              amount: transaction.eventAmount
+            }];
+            return { ...transaction, eventList };
+          });
+          setTransactions(mappedTransactions);
+        } else {
+          throw new Error('Invalid transactions data');
+        }
+
+        if (st.success && Array.isArray(st.records)) {
+          setStudents(st.records);
+        } else {
+          throw new Error('Invalid students data');
+        }
+
+        if (ev.success && Array.isArray(ev.events)) {
+          setEvents(ev.events);
+        } else {
+          throw new Error('Invalid events data');
+        }
+      } catch (err) {
+        setError('Failed to fetch data');
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      if (st.success && Array.isArray(st.records)) {
-        setStudents(st.records);
-      } else {
-        throw new Error("Invalid students data");
-      }
-
-      if (ev.success && Array.isArray(ev.events)) {
-        setEvents(ev.events);
-      } else {
-        throw new Error("Invalid events data");
-      }
-    } catch (err) {
-      setError("Failed to fetch data");
-      console.error("Error fetching data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchAll();
-}, []);
-
+    fetchAll();
+  }, []);
 
   useEffect(() => {
     const found = students.find(s => s.IDnumber === formStudentID);
@@ -203,7 +210,7 @@ const TransactionsPage = () => {
                       </ul>
                     </td>
                     <td className="px-4 py-2 text-center">{tx.paymentMethod}</td>
-                   {new Date(tx.date).toISOString().split('T')[0]} // Renders YYYY-MM-DD
+                    <td className="px-4 py-2 text-center">{new Date(tx.date).toISOString().split('T')[0]}</td>
                     <td className="px-4 py-2 text-center">₱{tx.eventList.reduce((sum, e) => sum + e.amount, 0)}</td>
                   </tr>
                 ))}
