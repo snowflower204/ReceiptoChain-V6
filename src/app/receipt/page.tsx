@@ -49,17 +49,18 @@ export default function ReceiptPage() {
   };
 
   const handleDownload = async (type: "png" | "jpeg") => {
-    if (receiptRef.current) {
-      const canvas = await html2canvas(receiptRef.current, { scale: 2 } as any);
-      const dataUrl = canvas.toDataURL(`image/${type}`);
+    const element = receiptRef.current;
+    if (!element) return;
 
-      if (dataUrl) {
-        setImageURL(dataUrl); // For QR Code
-        const link = document.createElement("a");
-        link.download = `receipt.${type}`;
-        link.href = dataUrl;
-        link.click();
-      }
+    const canvas = await html2canvas(element, { scale: 2 } as any); // <-- Declare canvas
+    const dataUrl = canvas.toDataURL(`image/${type}`);
+
+    if (dataUrl) {
+      setImageURL(dataUrl);
+      const link = document.createElement("a");
+      link.download = `receipt.${type}`;
+      link.href = dataUrl;
+      link.click();
     }
   };
 
@@ -73,7 +74,9 @@ export default function ReceiptPage() {
 
   const handleUploadToFirebase = async () => {
     if (receiptRef.current) {
-     const canvas = await html2canvas(receiptRef.current, { scale: 2 } as any);
+      const canvas = await html2canvas(receiptRef.current!, {
+        scale: 2,
+      } as any);
       const dataUrl = canvas.toDataURL("image/png");
 
       // Convert data URL to a file
@@ -96,7 +99,9 @@ export default function ReceiptPage() {
 
   const dataURLtoFile = (dataUrl: string, filename: string) => {
     const arr = dataUrl.split(",");
-    const mime = arr[0].match(/:(.*?);/)[1];
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/png"; // Fallback to PNG
+
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -113,7 +118,9 @@ export default function ReceiptPage() {
       <div className="flex-1 p-8 flex gap-8">
         {/* Editable Section */}
         <div className="bg-white p-6 rounded shadow-lg w-1/2">
-          <h1 className="text-2xl font-bold mb-4 text-center">Edit Receipt Template</h1>
+          <h1 className="text-2xl font-bold mb-4 text-center">
+            Edit Receipt Template
+          </h1>
 
           <label className="block mb-2">Receipt Title</label>
           <input
@@ -144,49 +151,81 @@ export default function ReceiptPage() {
 
         {/* Preview Section */}
         <div className="bg-white p-8 rounded shadow-lg w-1/2 relative">
-          <h1 className="text-2xl font-bold text-center mb-4">Receipt Preview</h1>
+          <h1 className="text-2xl font-bold text-center mb-4">
+            Receipt Preview
+          </h1>
 
           <div className="relative p-6 rounded shadow w-full" ref={receiptRef}>
-            <div className="flex justify-center mb-4">
-              <img src="/template.png" alt="Receipt Header" className="w-full max-w-xs" />
-            </div>
+            <>
+              <div className="flex justify-center mb-4">
+                <img
+                  src="/template.png"
+                  alt="Receipt Header"
+                  className="w-full max-w-xs"
+                />
+              </div>
 
-            <h2 className="text-xl font-bold text-center mb-2">
-              {receiptData.title}
-            </h2>
-            <p><strong>Student ID:</strong> {receiptData.studentID || "Waiting for Input..."}</p>
-            <p><strong>Date:</strong> {receiptData.date}</p>
+              <h2 className="text-xl font-bold text-center mb-2">
+                {receiptData.title}
+              </h2>
+              <p>
+                <strong>Student ID:</strong>{" "}
+                {receiptData.studentID || "Waiting for Input..."}
+              </p>
+              <p>
+                <strong>Date:</strong> {receiptData.date}
+              </p>
 
-            <table className="w-full mt-4 mb-4 text-left">
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Contribution</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receiptData.transactions.length > 0 ? (
-                  receiptData.transactions.map((transaction, index) => (
-                    <tr key={index}>
-                      <td>{transaction.event}</td>
-                      <td>₱{transaction.contribution}</td>
-                    </tr>
-                  ))
-                ) : (
+              <table className="w-full mt-4 mb-4 text-left">
+                <thead>
                   <tr>
-                    <td colSpan={2} className="text-center py-2">No Transactions Found</td>
+                    <th>Event</th>
+                    <th>Contribution</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {receiptData.transactions.length > 0 ? (
+                    receiptData.transactions.map((transaction, index) => (
+                      <tr key={index}>
+                        <td>{transaction.event}</td>
+                        <td>₱{transaction.contribution}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="text-center py-2">
+                        No Transactions Found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
 
-            <p className="text-right font-bold">Total: ₱{receiptData.total}</p>
+              <p className="text-right font-bold">
+                Total: ₱{receiptData.total}
+              </p>
+            </>
           </div>
 
           <div className="mt-4 flex justify-center gap-4">
-            <button onClick={() => handleDownload("png")} className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Download as PNG</button>
-            <button onClick={() => handleDownload("jpeg")} className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">Download as JPEG</button>
-            <button onClick={handleUploadToFirebase} className="bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600">Upload & Generate QR</button>
+            <button
+              onClick={() => handleDownload("png")}
+              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+            >
+              Download as PNG
+            </button>
+            <button
+              onClick={() => handleDownload("jpeg")}
+              className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
+            >
+              Download as JPEG
+            </button>
+            <button
+              onClick={handleUploadToFirebase}
+              className="bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600"
+            >
+              Upload & Generate QR
+            </button>
           </div>
 
           {/* QR Code */}
