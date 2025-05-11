@@ -1,41 +1,130 @@
-import { NextRequest, NextResponse } from 'next/server';
+
+import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '123456789',
-  database: 'dbreceipt',
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "123456789",
+  database: process.env.DB_NAME || "dbreceipt",
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 };
 
-// GET: Fetch all events
-export async function GET() {
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute('SELECT * FROM event');
-    await connection.end();
+// Define TypeScript interfaces for your data
+interface Event {
+  eventID: number;
+  title: string;
+  amount: number;
+  semester: string;
+  date?: string;
+  description?: string;
+}
 
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error('Error fetching events:', error);
-    return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
+// Custom type guard to check if result is an array of Event
+function isEventArray(result: unknown): result is Event[] {
+  return Array.isArray(result) && result.every(item => 
+    typeof item === 'object' && 
+    item !== null &&
+    'eventID' in item &&
+    'title' in item &&
+    'amount' in item &&
+    'semester' in item
+  );
+}
+
+const pool = mysql.createPool(dbConfig);
+
+export async function GET() {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    
+    // Use type assertion for the query result
+    const [rows] = await connection.query("SELECT * FROM event");
+    
+    // Process the result with proper type checking
+    let events: Event[] = [];
+    if (isEventArray(rows)) {
+      events = rows;
+    }
+    
+    return NextResponse.json({
+      success: true,
+      data: events,
+      count: events.length
+    });
+  } catch (error: unknown) {
+    console.error("Database error:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { 
+        success: false,
+        error: "Failed to fetch events",
+        details: errorMessage
+      }, 
+      { status: 500 }
+    );
+  } finally {
+    if (connection) connection.release();
   }
 }
 
-// POST: Create a new event
-export async function POST(req: NextRequest) {
-  const { title, date, description, amount, semester } = await req.json();
-
+export async function POST(request: Request) {
+  let connection;
   try {
-    const connection = await mysql.createConnection(dbConfig);
-    await connection.execute(
-      'INSERT INTO event (title, date, description, amount, semester) VALUES (?, ?, ?, ?, ?)',
-      [title, date, description, amount || null, semester || null]
+    const { title, amount, semester } = await request.json();
+    
+    // Validate required fields
+    if (!title || !amount || !semester) {
+      return NextResponse.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+    
+    connection = await pool.getConnection();
+    
+    // Check if event already exists
+    const [existing] = await connection.query(
+      "SELECT title FROM event WHERE title = ? AND semester = ?",
+      [title, semester]
     );
-    await connection.end();
-    return NextResponse.json({ message: 'Event created successfully' }, { status: 201 });
-  } catch (err) {
-    console.error("Error creating event:", err);
-    return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
+    
+    if (Array.isArray(existing) && existing.length > 0) {
+      return NextResponse.json(
+        { success: false, error: "Event with this title already exists for the semester" },
+        { status: 409 }
+      );
+    }
+    
+    // Insert new event and type the result
+    const [result] = await connection.query<mysql.ResultSetHeader>(
+      "INSERT INTO event (title, amount, semester) VALUES (?, ?, ?)",
+      [title, amount, semester]
+    );
+    
+    return NextResponse.json(
+      { 
+        success: true, 
+        message: "Event created successfully",
+        eventId: result.insertId
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    console.error("Database error:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { 
+        success: false,
+        error: "Failed to create event",
+        details: errorMessage
+      }, 
+      { status: 500 }
+    );
+  } finally {
+    if (connection) connection.release();
   }
 }

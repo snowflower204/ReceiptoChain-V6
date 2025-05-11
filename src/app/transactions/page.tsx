@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "@/app/sidebar";
+import { toast } from "react-toastify";
 
 interface Transaction {
   transactionID: number;
@@ -45,18 +46,50 @@ const TransactionsPage = () => {
   const [semester, setSemester] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<EventOption[]>([]);
   const [installmentAmount, setInstallmentAmount] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const studentID = searchParams.get("studentID") || "All";
 
-  
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        // Fetch all data in parallel
+        const [transactionsRes, studentsRes, eventsRes] = await Promise.all([
+          fetch('/api/transactions'),
+          fetch('/api/students'),
+          fetch('/api/events')
+        ]);
+
+        if (!transactionsRes.ok || !studentsRes.ok || !eventsRes.ok) {
+          throw new Error('Failed to fetch data');
+        }
+
+        const [transactionsData, studentsData, eventsData] = await Promise.all([
+          transactionsRes.json(),
+          studentsRes.json(),
+          eventsRes.json()
+        ]);
+
+        setTransactions(transactionsData);
+        setStudents(studentsData);
+        setEvents(eventsData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   useEffect(() => {
     const found = students.find((s) => s.IDnumber === formStudentID);
     setSelectedStudent(found || null);
-    // Reset selected events when student changes
     setSelectedEvents([]);
     setInstallmentAmount(null);
   }, [formStudentID, students]);
@@ -71,16 +104,53 @@ const TransactionsPage = () => {
     setSelectedEvents((prev) => prev.filter((e) => e.eventID !== eventID));
   };
 
-  const handleFullPayment = () => {
-    const total = selectedEvents.reduce((sum, e) => sum + e.amount, 0);
-    alert(`Processing full payment of ₱${total} for selected events`);
-    // Here you would typically call your payment API
-  };
+  const handlePayment = async (isFullPayment: boolean) => {
+    if (!selectedStudent || selectedEvents.length === 0) return;
+    if (isFullPayment === false && !installmentAmount) return;
 
-  const handleInstallmentPayment = () => {
-    if (!installmentAmount) return;
-    alert(`Processing installment payment of ₱${installmentAmount}`);
-    // Here you would typically call your payment API
+    try {
+      setProcessingPayment(true);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // In a real app, you would call your payment API here
+      // const response = await fetch('/api/payments', {
+      //   method: 'POST',
+      //   body: JSON.stringify({
+      //     studentID: selectedStudent.IDnumber,
+      //     events: selectedEvents,
+      //     amount: isFullPayment ? totalAmount : installmentAmount,
+      //     isFullPayment
+      //   })
+      // });
+      
+      // if (!response.ok) throw new Error('Payment failed');
+
+      // Show success notification
+      toast.success(
+        `Payment of ₱${isFullPayment ? totalAmount : installmentAmount} processed successfully for ${selectedStudent.firstName} ${selectedStudent.lastName} (ID: ${selectedStudent.IDnumber})`,
+        { autoClose: 3000 }
+      );
+
+      // Reset form
+      setSelectedEvents([]);
+      setInstallmentAmount(null);
+      
+      // Refresh transactions
+      const transactionsRes = await fetch('/api/transactions');
+      if (transactionsRes.ok) {
+        const newTransactions = await transactionsRes.json();
+        setTransactions(newTransactions);
+      }
+    } catch (err) {
+      toast.error(
+        `Payment failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        { autoClose: 3000 }
+      );
+    } finally {
+      setProcessingPayment(false);
+    }
   };
 
   const totalAmount = selectedEvents.reduce((sum, e) => sum + e.amount, 0);
@@ -93,8 +163,24 @@ const TransactionsPage = () => {
     ? events.filter(event => event.semester === semester)
     : events;
 
-  if (loading) return <div className="p-8">Loading...</div>;
-  if (error) return <div className="p-8 text-red-500">{error}</div>;
+  if (loading) return (
+    <div className="flex min-h-screen bg-gray-100">
+      <Sidebar />
+      <div className="flex-1 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+          <p className="mt-2">Loading transactions...</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex min-h-screen bg-gray-100">
+      <Sidebar />
+      <div className="flex-1 p-8 text-red-500">{error}</div>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -180,10 +266,23 @@ const TransactionsPage = () => {
                 <div className="font-semibold mt-2">Total: ₱{totalAmount}</div>
                 {selectedEvents.length > 0 && (
                   <button
-                    onClick={handleFullPayment}
-                    className="mt-4 w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded"
+                    onClick={() => handlePayment(true)}
+                    disabled={processingPayment}
+                    className={`mt-4 w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded flex items-center justify-center ${
+                      processingPayment ? 'opacity-75' : ''
+                    }`}
                   >
-                    Process Full Payment
+                    {processingPayment ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing Payment...
+                      </>
+                    ) : (
+                      'Process Full Payment'
+                    )}
                   </button>
                 )}
               </div>
@@ -222,15 +321,25 @@ const TransactionsPage = () => {
                   </div>
                 )}
                 <button
-                  onClick={handleInstallmentPayment}
-                  disabled={!installmentAmount}
-                  className={`w-full py-2 rounded ${
-                    installmentAmount
+                  onClick={() => handlePayment(false)}
+                  disabled={!installmentAmount || processingPayment}
+                  className={`w-full py-2 rounded flex items-center justify-center ${
+                    installmentAmount && !processingPayment
                       ? "bg-blue-500 hover:bg-blue-600 text-white"
                       : "bg-gray-300 text-gray-500 cursor-not-allowed"
                   }`}
                 >
-                  Process Installment
+                  {processingPayment ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    'Process Installment'
+                  )}
                 </button>
               </div>
             )}
@@ -253,6 +362,7 @@ const TransactionsPage = () => {
               <thead className="bg-gray-300">
                 <tr>
                   <th className="px-4 py-2">Transaction ID</th>
+                  <th className="px-4 py-2">Student ID</th>
                   <th className="px-4 py-2">Student Name</th>
                   <th className="px-4 py-2">Events</th>
                   <th className="px-4 py-2">Payment Method</th>
@@ -266,6 +376,7 @@ const TransactionsPage = () => {
                   filteredTransactions.map((tx) => (
                     <tr key={tx.transactionID} className="hover:bg-gray-100">
                       <td className="px-4 py-2 text-center">{tx.transactionID}</td>
+                      <td className="px-4 py-2 text-center">{tx.IDnumber}</td>
                       <td className="px-4 py-2 text-center">
                         {tx.firstName} {tx.lastName}
                       </td>
@@ -301,7 +412,7 @@ const TransactionsPage = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="text-center text-gray-500 py-4">
+                    <td colSpan={8} className="text-center text-gray-500 py-4">
                       No transactions found.
                     </td>
                   </tr>

@@ -30,7 +30,7 @@ export default function ReceiptPage() {
     total: 0,
   });
 
-  const [showQRCodeModal, setShowQRCodeModal] = useState(false); // State for QR code modal visibility
+  const [isHoveringQRButton, setIsHoveringQRButton] = useState(false);
 
   const fetchTransactionByStudentID = async (studentID: string) => {
     try {
@@ -46,7 +46,6 @@ export default function ReceiptPage() {
         total: data.total,
       }));
 
-      // Call the API to generate the QR code after getting the student data
       const qrCodeResponse = await fetch('/api/generateQRCode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,8 +55,7 @@ export default function ReceiptPage() {
       if (!qrCodeResponse.ok) throw new Error("QR Code generation failed");
 
       const qrCodeData = await qrCodeResponse.json();
-      setImageURL(qrCodeData.qrCode); // Set the QR code URL here
-
+      setImageURL(qrCodeData.qrCode);
     } catch (err) {
       console.error(err);
     }
@@ -69,14 +67,6 @@ export default function ReceiptPage() {
     if (field === "studentID") {
       fetchTransactionByStudentID(value);
     }
-  };
-
-  const handleViewQRCode = () => {
-    setShowQRCodeModal(true); // Show QR code modal
-  };
-
-  const handleCloseQRCodeModal = () => {
-    setShowQRCodeModal(false); // Close QR code modal
   };
 
   return (
@@ -157,44 +147,71 @@ export default function ReceiptPage() {
           </div>
 
           <div className="mt-4 flex justify-center gap-4">
-            <button
-              onClick={handleViewQRCode}
-              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-            >
-              View QR Code
-            </button>
+            <div className="relative">
+              <button
+                onMouseEnter={() => setIsHoveringQRButton(true)}
+                onMouseLeave={() => setIsHoveringQRButton(false)}
+                onClick={() => setShowQRCode(!showQRCode)}
+                className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+              >
+                View QR Code
+              </button>
+              
+              {/* Hover Popup */}
+              {isHoveringQRButton && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -translate-y-2 bg-white p-4 rounded-lg shadow-xl border border-gray-200 z-10">
+                  <p className="text-sm text-center mb-2">Scan to get Receipt</p>
+                  <div className="relative w-48 h-48 mx-auto">
+                    <QRCodeCanvas
+                      value={imageURL || ""}
+                      size={192}
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                      level="H"
+                      includeMargin={true}
+                      imageSettings={{
+                        src: "/logo.png",
+                        height: 40,
+                        width: 40,
+                        excavate: true,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-         {/* QR Code Modal */}
-{showQRCode && (
-  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-    <div className="bg-white p-6 rounded-lg shadow-lg relative">
-      <button
-        onClick={() => setShowQRCode(false)}
-        className="absolute top-2 right-2 text-gray-500 hover:text-red-500"
-      >
-        ✕
-      </button>
-      <p className="mb-4 text-center font-semibold">Scan to View Receipt</p>
-      <div className="relative w-40 h-40 mx-auto">
-        <QRCodeCanvas
-          value={imageURL || ""}
-          size={160}
-          bgColor="#ffffff"
-          fgColor="#000000"
-          level="H" // High error correction to handle logo overlap
-          includeMargin={true}
-        />
-        <img
-          src="/logo.png"
-          alt="Logo"
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded"
-        />
-      </div>
-    </div>
-  </div>
-)}
-
+          {/* Full Screen QR Code Modal */}
+          {showQRCode && (
+            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg relative">
+                <button
+                  onClick={() => setShowQRCode(false)}
+                  className="absolute top-2 right-2 text-gray-500 hover:text-red-500"
+                >
+                  ✕
+                </button>
+                <p className="mb-4 text-center font-semibold">Scan to View Receipt</p>
+                <div className="relative w-80 h-80 mx-auto">
+                  <QRCodeCanvas
+                    value={imageURL || ""}
+                    size={320}
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                    level="H"
+                    includeMargin={true}
+                    imageSettings={{
+                      src: "/logo.png",
+                      height: 64,
+                      width: 64,
+                      excavate: true,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
