@@ -17,6 +17,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "firebase": "^11.7.1",
     "html2canvas": "^1.4.1",
     "mysql2": "^3.14.1",
     "next": "15.3.1",

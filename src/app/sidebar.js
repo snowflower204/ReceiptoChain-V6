@@ -39,9 +39,7 @@ export default function Sidebar() {
         <Link href="/dashboard" className="hover:text-yellow-400 flex items-center gap-2">
           {!collapsed && 'Dashboard'}
         </Link>
-        <Link href="/qr-scanner" className="hover:text-yellow-400 flex items-center gap-2">
-          {!collapsed && 'QR Scanner'}
-        </Link>
+
         <Link href="/student-records" className="hover:text-yellow-400 flex items-center gap-2">
           {!collapsed && 'Student Records'}
         </Link>
