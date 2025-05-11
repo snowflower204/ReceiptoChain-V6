@@ -3,9 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import html2canvas from "html2canvas";
 import { QRCodeCanvas } from "qrcode.react";
-import Sidebar from "@/app/sidebar";
+import Sidebar from "../sidebar";
 import { uploadToFirebase } from "../lib/firebase";
-
 
 type Transaction = {
   event: string;
@@ -54,11 +53,13 @@ export default function ReceiptPage() {
       const canvas = await html2canvas(receiptRef.current, { scale: 2 } as any);
       const dataUrl = canvas.toDataURL(`image/${type}`);
 
-      setImageURL(dataUrl); // For QR Code
-      const link = document.createElement("a");
-      link.download = `receipt.${type}`;
-      link.href = dataUrl;
-      link.click();
+      if (dataUrl) {
+        setImageURL(dataUrl); // For QR Code
+        const link = document.createElement("a");
+        link.download = `receipt.${type}`;
+        link.href = dataUrl;
+        link.click();
+      }
     }
   };
 
@@ -81,13 +82,15 @@ export default function ReceiptPage() {
       // Upload to Firebase
       const fileUrl = await uploadToFirebase(file);
 
-      setImageURL(fileUrl); // For QR Code
+      if (fileUrl) {
+        setImageURL(fileUrl); // For QR Code
 
-      // Trigger the download automatically
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.download = "receipt.png";
-      link.click();
+        // Trigger the download automatically
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.download = "receipt.png";
+        link.click();
+      }
     }
   };
 
