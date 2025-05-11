@@ -21,14 +21,10 @@ export default function AddStudent() {
   };
 
   const handleAddStudent = async () => {
-    if (
-      !newStudent.studentID ||
-      !newStudent.firstName ||
-      !newStudent.lastName ||
-      !newStudent.course ||
-      !newStudent.year ||
-      !newStudent.IDnumber
-    ) {
+    const { studentID, firstName, lastName, course, year, IDnumber } =
+      newStudent;
+
+    if (!studentID || !firstName || !lastName || !course || !year || !IDnumber) {
       alert("Please fill in all fields.");
       return;
     }
@@ -55,10 +51,9 @@ export default function AddStudent() {
       });
     } catch (error) {
       console.error("Error adding student:", error);
-      alert("Error adding student");
+      alert("Error adding student.");
     }
   };
-
 
   const handleFileUpload = () => {
     if (file) {
@@ -149,7 +144,7 @@ export default function AddStudent() {
             </div>
             <button
               onClick={handleAddStudent}
-              className="mt-4 w-full py-2 text-white rounded-md font-semibold bg-green-700 hover:bg-green-800"
+              className="mt-4 w-full py-2 text-white rounded-md font-semibold bg-green-700 hover:bg-green-800 transition"
             >
               Add Student
             </button>

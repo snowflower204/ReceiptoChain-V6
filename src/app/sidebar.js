@@ -44,7 +44,7 @@ export default function Sidebar() {
           {!collapsed && 'Student Records'}
         </Link>
         <Link href="/student-records/add" className="hover:text-yellow-400 flex items-center gap-2">
-          {!collapsed && 'Import Students'}
+          {!collapsed && 'Import Student'}
         </Link>
         <Link href="/events" className="hover:text-yellow-400 flex items-center gap-2">
           {!collapsed && 'Manage Events'}
