@@ -21,6 +21,7 @@ type ReceiptData = {
 export default function ReceiptPage() {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [imageURL, setImageURL] = useState<string | null>(null);
+  const [showQRCode, setShowQRCode] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData>({
     title: "Receipt",
     studentID: "",
@@ -28,6 +29,8 @@ export default function ReceiptPage() {
     transactions: [],
     total: 0,
   });
+
+  const [showQRCodeModal, setShowQRCodeModal] = useState(false); // State for QR code modal visibility
 
   const fetchTransactionByStudentID = async (studentID: string) => {
     try {
@@ -68,21 +71,13 @@ export default function ReceiptPage() {
     }
   };
 
-  const handleDownload = async (type: "png" | "jpeg") => {
-  const element = receiptRef.current;
-  if (!element) return;
+  const handleViewQRCode = () => {
+    setShowQRCodeModal(true); // Show QR code modal
+  };
 
-  const canvas = await html2canvas(element); // Removed the scale option
-  const dataUrl = canvas.toDataURL(`image/${type}`);
-
-  if (dataUrl) {
-    const link = document.createElement("a");
-    link.download = `receipt.${type}`;
-    link.href = dataUrl;
-    link.click();
-  }
-};
-
+  const handleCloseQRCodeModal = () => {
+    setShowQRCodeModal(false); // Close QR code modal
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -162,17 +157,44 @@ export default function ReceiptPage() {
           </div>
 
           <div className="mt-4 flex justify-center gap-4">
-            <button onClick={() => handleDownload("png")} className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Download as PNG</button>
-            <button onClick={() => handleDownload("jpeg")} className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">Download as JPEG</button>
+            <button
+              onClick={handleViewQRCode}
+              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+            >
+              View QR Code
+            </button>
           </div>
 
-          {/* QR Code */}
-          {imageURL && (
-            <div className="mt-6 text-center">
-              <p className="mb-2 font-semibold">Scan to view receipt image</p>
-              <QRCodeCanvas value={imageURL} size={128} />
-            </div>
-          )}
+         {/* QR Code Modal */}
+{showQRCode && (
+  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg shadow-lg relative">
+      <button
+        onClick={() => setShowQRCode(false)}
+        className="absolute top-2 right-2 text-gray-500 hover:text-red-500"
+      >
+        ✕
+      </button>
+      <p className="mb-4 text-center font-semibold">Scan to View Receipt</p>
+      <div className="relative w-40 h-40 mx-auto">
+        <QRCodeCanvas
+          value={imageURL || ""}
+          size={160}
+          bgColor="#ffffff"
+          fgColor="#000000"
+          level="H" // High error correction to handle logo overlap
+          includeMargin={true}
+        />
+        <img
+          src="/logo.png"
+          alt="Logo"
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded"
+        />
+      </div>
+    </div>
+  </div>
+)}
+
         </div>
       </div>
     </div>
