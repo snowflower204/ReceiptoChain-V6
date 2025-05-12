@@ -14,7 +14,6 @@ const dbConfig = {
 const buildTransactionQuery = (filters: { 
   studentID: string; 
   eventID: string; 
-  installmentStatus: string; 
   paymentMethod: string 
 }) => {
   let sqlQuery = `
@@ -32,18 +31,13 @@ const buildTransactionQuery = (filters: {
       e.eventID,
       e.title AS eventTitle,
       e.amount AS eventAmount,
-      e.semester,
-      i.installmentID,
-      i.amount AS installmentAmount,
-      i.status AS installmentStatus
+      e.semester
     FROM
       transactions t
     JOIN
       student s ON t.studentID = s.studentID
     LEFT JOIN
       event e ON t.eventID = e.eventID
-    LEFT JOIN
-      installments i ON t.installmentID = i.installmentID
     WHERE 1=1
   `;
 
@@ -56,10 +50,6 @@ const buildTransactionQuery = (filters: {
   if (filters.eventID !== 'All') {
     sqlQuery += ` AND e.eventID = ?`;
     values.push(filters.eventID);
-  }
-  if (filters.installmentStatus !== 'All') {
-    sqlQuery += ` AND i.status = ?`;
-    values.push(filters.installmentStatus);
   }
   if (filters.paymentMethod !== 'All') {
     sqlQuery += ` AND t.paymentMethod = ?`;
@@ -86,10 +76,10 @@ export async function GET(request: NextRequest) {
         information_schema.tables 
       WHERE 
         table_schema = ? AND 
-        table_name IN ('transactions', 'student', 'event', 'installments')
+        table_name IN ('transactions', 'student', 'event')
     `, [dbConfig.database]);
 
-    if (!Array.isArray(tables) || tables.length < 4) {
+    if (!Array.isArray(tables) || tables.length < 3) {
       return NextResponse.json(
         { error: 'Required database tables are missing' }, 
         { status: 500 }
@@ -100,14 +90,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const studentID = searchParams.get('studentID') || 'All';
     const eventID = searchParams.get('eventID') || 'All';
-    const installmentStatus = searchParams.get('installmentStatus') || 'All';
     const paymentMethod = searchParams.get('paymentMethod') || 'All';
 
     // Build SQL query with dynamic filters
     const { sqlQuery, values } = buildTransactionQuery({
       studentID,
       eventID,
-      installmentStatus,
       paymentMethod
     });
 
@@ -130,8 +118,7 @@ export async function GET(request: NextRequest) {
         title: row.eventTitle,
         amount: row.eventAmount
       }],
-      semester: row.semester,
-      ...(row.installmentAmount && { installmentAmount: row.installmentAmount })
+      semester: row.semester
     }));
 
     return NextResponse.json({ success: true, transactions });
@@ -157,7 +144,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { studentID, eventID, installmentID, paymentMethod, date, receiptNumber, status } = body;
+    const { studentID, eventID, paymentMethod, date, receiptNumber, status } = body;
 
     if (!studentID || !paymentMethod || !date) {
       return NextResponse.json(
@@ -185,14 +172,13 @@ export async function POST(request: NextRequest) {
 
     const insertQuery = `
       INSERT INTO transactions 
-        (studentID, eventID, installmentID, paymentMethod, date, receiptNumber, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (studentID, eventID, paymentMethod, date, receiptNumber, status)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await connection.execute(insertQuery, [
       actualStudentID, 
       eventID || null, 
-      installmentID || null, 
       paymentMethod, 
       date, 
       receiptNumber || null, 
@@ -218,7 +204,6 @@ export async function POST(request: NextRequest) {
     if (connection) await connection.end();
   }
 }
-
 
 // PUT: Update transaction
 export async function PUT(request: NextRequest) {

@@ -5,53 +5,48 @@ import { useSearchParams } from "next/navigation";
 import Sidebar from "@/app/sidebar";
 import { toast } from "react-toastify";
 
+// Interfaces
 interface Transaction {
   transactionID: number;
+  studentID: string;
+  eventID: string;
   date: string;
   paymentMethod: string;
   receiptNumber: string;
   status: string;
-  IDnumber: string;
-  firstName: string;
-  lastName: string;
-  course: string;
-  year: string;
-  eventList: { title: string; amount: number }[];
-  semester: string;
-  installmentAmount?: number;
+  totalAmount: number;
 }
 
 interface Student {
   IDnumber: string;
-  firstName: string;
-  lastName: string;
-  course: string;
-  year: string;
-  unpaidEvents?: string[];
+  FirstName: string;
+  LastName: string;
+  Course: string;
+  Year: string;
 }
 
-interface EventOption {
+interface Event {
   eventID: number;
   title: string;
   amount: number;
   semester: string;
+  date: string;
 }
 
 const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [events, setEvents] = useState<EventOption[]>([]);
-  const [formStudentID, setFormStudentID] = useState("");
+  const [events, setEvents] = useState<Event[]>([]);
+  const [studentID, setStudentID] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [semester, setSemester] = useState("");
-  const [selectedEvents, setSelectedEvents] = useState<EventOption[]>([]);
-  const [installmentAmount, setInstallmentAmount] = useState<number | null>(null);
+  const [selectedEvents, setSelectedEvents] = useState<Event[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
   const [loading, setLoading] = useState(false);
-  const [processingPayment, setProcessingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
-  const studentID = searchParams.get("studentID") || "All";
+  const initialStudentID = searchParams.get("studentID") || "";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,112 +54,103 @@ const TransactionsPage = () => {
         setLoading(true);
         const [transactionsRes, studentsRes, eventsRes] = await Promise.all([
           fetch("/api/transactions"),
-          fetch("/api/students"),
-          fetch("/api/events")
+          fetch("/api/records"),
+          fetch("/api/events"),
         ]);
 
         if (!transactionsRes.ok || !studentsRes.ok || !eventsRes.ok) {
-          throw new Error("Failed to fetch data");
+          throw new Error("Failed to fetch data.");
         }
 
-        const [transactionsData, studentsData, eventsData] = await Promise.all([
-          transactionsRes.json(),
-          studentsRes.json(),
-          eventsRes.json(),
-        ]);
+        const transactionsData = await transactionsRes.json();
+        const studentsData = await studentsRes.json();
+        const eventsData = await eventsRes.json();
 
-        setTransactions(transactionsData);
-        setStudents(studentsData);
-        setEvents(eventsData);
+        setTransactions(transactionsData.transactions || []);
+        setStudents(studentsData.students || []);
+        setEvents(eventsData.events || []);
+
+        if (initialStudentID) {
+          const foundStudent = studentsData.students?.find((s: Student) => s.IDnumber === initialStudentID);
+          if (foundStudent) setSelectedStudent(foundStudent);
+          setStudentID(initialStudentID);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred");
-        toast.error("Failed to load data. Please try again later.");
+        toast.error("Failed to load data.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [initialStudentID]);
 
-  useEffect(() => {
-    const found = students.find((s) => s.IDnumber === formStudentID);
-    setSelectedStudent(found || null);
-    setSelectedEvents([]);
-    setInstallmentAmount(null);
-  }, [formStudentID, students]);
-
-  const handleAddEvent = (event: EventOption) => {
-    if (!selectedEvents.find((e) => e.eventID === event.eventID)) {
-      setSelectedEvents((prev) => [...prev, event]);
+  const handleStudentSearch = () => {
+    const found = students.find((s) => s.IDnumber.trim() === studentID.trim());
+    if (!found) {
+      toast.error("Student not found.");
+      setSelectedStudent(null);
+    } else {
+      setSelectedStudent(found);
     }
   };
 
-  const handleRemoveEvent = (eventID: number) => {
-    setSelectedEvents((prev) => prev.filter((e) => e.eventID !== eventID));
-  };
+  const handlePayment = async () => {
+    if (!selectedStudent || selectedEvents.length === 0 || !paymentMethod || !receiptNumber) {
+      toast.error("Please complete all fields.");
+      return;
+    }
 
-  const handlePayment = async (isFullPayment: boolean) => {
-    if (!selectedStudent || selectedEvents.length === 0) return;
-    if (!isFullPayment && !installmentAmount) return;
-
-    const totalAmount = selectedEvents.reduce((sum, e) => sum + e.amount, 0);
+    const totalAmount = selectedEvents.reduce((sum: number, e: Event) => sum + e.amount, 0);
 
     try {
-      setProcessingPayment(true);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setLoading(true);
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentID: selectedStudent.IDnumber,
+          events: selectedEvents,
+          paymentMethod,
+          receiptNumber,
+          totalAmount,
+        }),
+      });
 
-      toast.success(
-        `Payment of ₱${isFullPayment ? totalAmount : installmentAmount} processed successfully for ${selectedStudent.firstName} ${selectedStudent.lastName} (ID: ${selectedStudent.IDnumber})`,
-        { autoClose: 3000 }
-      );
+      if (!response.ok) throw new Error(await response.text());
 
+      toast.success(`Payment of ₱${totalAmount} processed successfully`);
+
+      const refresh = await fetch("/api/transactions");
+      const updated = await refresh.json();
+      setTransactions(updated.transactions || []);
       setSelectedEvents([]);
-      setInstallmentAmount(null);
-
-      const transactionsRes = await fetch("/api/transactions");
-      if (transactionsRes.ok) {
-        const newTransactions = await transactionsRes.json();
-        setTransactions(newTransactions);
-      }
+      setPaymentMethod("");
+      setReceiptNumber("");
     } catch (err) {
-      toast.error(
-        `Payment failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-        { autoClose: 3000 }
-      );
+      toast.error(`Payment failed: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
-      setProcessingPayment(false);
+      setLoading(false);
     }
+  };
+
+  const handleEventSelection = (event: Event) => {
+    setSelectedEvents((prevSelectedEvents) => {
+      if (prevSelectedEvents.some((e) => e.eventID === event.eventID)) {
+        return prevSelectedEvents.filter((e) => e.eventID !== event.eventID); // Deselect
+      } else {
+        return [...prevSelectedEvents, event]; // Select
+      }
+    });
   };
 
   const totalAmount = selectedEvents.reduce((sum, e) => sum + e.amount, 0);
 
-  const filteredTransactions = transactions.filter((tx) => {
-    return studentID === "All" || tx.IDnumber === studentID;
-  });
-
-  const filteredEvents = semester
-    ? events.filter((event) => event.semester === semester)
-    : events;
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen bg-gray-100">
-        <Sidebar />
-        <div className="flex-1 p-8 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-            <p className="mt-2">Loading transactions...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
-      <div className="flex-1 flex justify-end p-4">
+      <div className="flex flex-1 justify-end p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-[1000px]">
           <h1 className="text-3xl font-bold mb-6 text-center">Transaction Page</h1>
 
@@ -174,146 +160,125 @@ const TransactionsPage = () => {
             </div>
           )}
 
-          {/* Render form and installment UI correctly here */}
-          <div className="mb-4">
-            <h2 className="text-xl">Select Student</h2>
-            <select
-              className="border p-2 w-full"
-              value={formStudentID}
-              onChange={(e) => setFormStudentID(e.target.value)}
-            >
-              <option value="">Select Student</option>
-              {students.map((student) => (
-                <option key={student.IDnumber} value={student.IDnumber}>
-                  {student.firstName} {student.lastName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Semester Filter */}
-          <div className="mb-4">
-            <h2 className="text-xl">Filter by Semester</h2>
-            <select
-              className="border p-2 w-full"
-              value={semester}
-              onChange={(e) => setSemester(e.target.value)}
-            >
-              <option value="">All Semesters</option>
-              <option value="1st Semester">1st Semester</option>
-              <option value="2nd Semester">2nd Semester</option>
-              <option value="Summer">Summer</option>
-            </select>
-          </div>
-
-          {/* Event Selection */}
-          <h2 className="text-xl mb-2">Select Events</h2>
-          {filteredEvents.map((event) => (
-            <div key={event.eventID} className="flex items-center justify-between mb-2">
-              <p>{event.title} - ₱{event.amount}</p>
+          {/* Student Search Section */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-2">Student ID Number</h2>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  className="border p-2 w-full"
+                  value={studentID}
+                  onChange={(e) => setStudentID(e.target.value)}
+                  placeholder="Enter student ID number"
+                  list="studentList"
+                />
+                <datalist id="studentList">
+                  {students.map((student) => (
+                    <option key={student.IDnumber} value={student.IDnumber}>
+                      {student.FirstName} {student.LastName}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
               <button
-                onClick={() => handleAddEvent(event)}
-                className="bg-blue-500 text-white p-2 rounded"
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+                onClick={handleStudentSearch}
               >
-                Add Event
+                Search
               </button>
             </div>
-          ))}
 
-          {/* Selected Events */}
-          {selectedEvents.length > 0 && (
-            <div className="mt-4 mb-4">
-              <h2 className="text-xl mb-2">Selected Events</h2>
-              <ul className="border rounded p-2">
-                {selectedEvents.map((event) => (
-                  <li key={event.eventID} className="flex justify-between items-center py-1">
-                    <span>{event.title} - ₱{event.amount}</span>
-                    <button
-                      onClick={() => handleRemoveEvent(event.eventID)}
-                      className="text-red-500"
-                    >
-                      Remove
-                    </button>
-                  </li>
+            {selectedStudent && (
+              <div className="mt-4 p-4 border rounded bg-gray-50">
+                <h3 className="font-semibold">Student Information</h3>
+                <p>Name: {selectedStudent.FirstName} {selectedStudent.LastName}</p>
+                <p>Course: {selectedStudent.Course}</p>
+                <p>Year: {selectedStudent.Year}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Event Selection Section */}
+          {selectedStudent && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Select Events to Pay</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {events.map((event) => (
+                  <div key={event.eventID} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`event-${event.eventID}`}
+                      checked={selectedEvents.some((e) => e.eventID === event.eventID)}
+                      onChange={() => handleEventSelection(event)}
+                    />
+                    <label htmlFor={`event-${event.eventID}`} className="ml-2">
+                      {event.title} - ₱{event.amount}
+                    </label>
+                  </div>
                 ))}
-                <li className="font-bold border-t mt-2 pt-2">
-                  Total: ₱{totalAmount}
-                </li>
-              </ul>
+              </div>
             </div>
           )}
 
-          {/* Payment Options */}
-          <h2 className="text-xl mb-2">Payment Options</h2>
-          <div className="space-y-4">
-            <button
-              onClick={() => handlePayment(true)}
-              className="bg-green-500 text-white p-3 rounded w-full"
-              disabled={processingPayment || selectedEvents.length === 0}
-            >
-              {processingPayment ? "Processing..." : `Full Payment - ₱${totalAmount}`}
-            </button>
-            
-            <div className="mb-4">
-              <label className="block text-lg">Installment Payment</label>
-              <input
-                type="number"
-                className="border p-2 w-full"
-                value={installmentAmount || ""}
-                onChange={(e) => setInstallmentAmount(Number(e.target.value))}
-                disabled={processingPayment || selectedEvents.length === 0}
-                placeholder="Enter installment amount"
-              />
+          {/* Transaction History Section */}
+          {selectedStudent && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">Transaction History</h2>
+              <div className="space-y-4">
+                {transactions
+                  .filter((transaction) => transaction.studentID === selectedStudent.IDnumber)
+                  .map((transaction) => (
+                    <div key={transaction.transactionID} className="border p-4 rounded-lg bg-gray-50">
+                      <p><strong>Date:</strong> {transaction.date}</p>
+                      <p><strong>Payment Method:</strong> {transaction.paymentMethod}</p>
+                      <p><strong>Receipt Number:</strong> {transaction.receiptNumber}</p>
+                      <p><strong>Total Amount:</strong> ₱{transaction.totalAmount}</p>
+                      <p><strong>Status:</strong> {transaction.status}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Payment Section */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-2">Payment Options</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block mb-2">Payment Method</label>
+                <select
+                  className="border p-2 w-full"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option value="">Select payment method</option>
+                  <option value="GCash">GCash</option>
+                  <option value="Cash">Cash on Hand</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-2">Receipt Number</label>
+                <input
+                  type="text"
+                  className="border p-2 w-full"
+                  value={receiptNumber}
+                  onChange={(e) => setReceiptNumber(e.target.value)}
+                  placeholder="Enter receipt number"
+                />
+              </div>
+            </div>
+
+            {/* Payment Button aligned to end */}
+            <div className="flex justify-end p-4">
               <button
-                onClick={() => handlePayment(false)}
-                className="bg-yellow-500 text-white p-3 rounded w-full mt-2"
-                disabled={processingPayment || !installmentAmount || selectedEvents.length === 0}
+                onClick={handlePayment}
+                className="bg-green-500 text-white px-6 py-2 rounded"
+                disabled={loading || selectedEvents.length === 0 || !paymentMethod || !receiptNumber}
               >
-                {processingPayment ? "Processing..." : "Process Installment"}
+                {loading ? "Processing..." : "Pay"}
               </button>
             </div>
-          </div>
-
-          {/* Transaction History */}
-          <div className="mt-8">
-            <h2 className="text-xl mb-4">Transaction History</h2>
-            {filteredTransactions.length === 0 ? (
-              <p>No transactions found</p>
-            ) : (
-              <ul className="space-y-2">
-                {filteredTransactions.map((transaction) => (
-                  <li key={transaction.transactionID} className="border-b py-4">
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Date:</span>
-                      <span>{transaction.date}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Student:</span>
-                      <span>{transaction.firstName} {transaction.lastName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-semibold">Payment Method:</span>
-                      <span>{transaction.paymentMethod}</span>
-                    </div>
-                    <div className="mt-2">
-                      <h3 className="font-semibold">Events:</h3>
-                      <ul className="ml-4">
-                        {transaction.eventList.map((event, index) => (
-                          <li key={index} className="flex justify-between">
-                            <span>{event.title}</span>
-                            <span>₱{event.amount}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="flex justify-between font-bold mt-2">
-                      <span>Total:</span>
-                      <span>₱{transaction.eventList.reduce((sum, event) => sum + event.amount, 0)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         </div>
       </div>
