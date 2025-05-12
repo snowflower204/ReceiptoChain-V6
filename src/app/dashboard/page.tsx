@@ -38,26 +38,31 @@ export default function Dashboard() {
 
   // Reusable fetcher with error handling
   const fetchData = async (url: string, setState: Function, label: string) => {
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setState(data);
-      } else {
-        console.error(`Fetched ${label} data is not an array:`, data);
-        setState([]);
-      }
-    } catch (err) {
-      console.error(`Error fetching ${label}:`, err);
-      setState([]);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Error fetching ${label}`);
+    
+    const data = await res.json();
+    const arrayData = data[label] && Array.isArray(data[label]) ? data[label] : [];
+    
+    if (!Array.isArray(arrayData)) {
+      console.error(`Fetched ${label} data is not an array:`, data);
     }
-  };
+    
+    setState(arrayData);
+  } catch (err) {
+    console.error(`Error fetching ${label}:`, err);
+    setState([]);
+  }
+};
+
 
   useEffect(() => {
     fetchData('/api/records', setStudents, 'students');
     fetchData('/api/transactions', setTransactions, 'transactions');
     fetchData('/api/events', setEvents, 'events');
-    fetchData('/api/installments', setInstallments, 'installments');
+    // Removed fetch for /api/installments as endpoint does not exist
+    // fetchData('/api/installments', setInstallments, 'installments');
   }, []);
 
   // Process Data
