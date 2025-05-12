@@ -1,5 +1,4 @@
-
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 
 const dbConfig = {
@@ -22,7 +21,6 @@ interface Event {
   description?: string;
 }
 
-// Custom type guard to check if result is an array of Event
 function isEventArray(result: unknown): result is Event[] {
   return Array.isArray(result) && result.every(item => 
     typeof item === 'object' && 
@@ -40,16 +38,22 @@ export async function GET() {
   let connection;
   try {
     connection = await pool.getConnection();
-    
-    // Use type assertion for the query result
     const [rows] = await connection.query("SELECT * FROM event");
-    
-    // Process the result with proper type checking
+
     let events: Event[] = [];
     if (isEventArray(rows)) {
       events = rows;
     }
-    
+
+    if (events.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No events found.",
+        data: [],
+        count: 0
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: events,
@@ -74,37 +78,33 @@ export async function GET() {
 export async function POST(request: Request) {
   let connection;
   try {
-    const { title, amount, semester } = await request.json();
-    
-    // Validate required fields
-    if (!title || !amount || !semester) {
+    const {title, date, description, amount, semester } = await request.json();
+
+    if (!title || !date || !description || !amount || !semester) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
       );
     }
-    
+
     connection = await pool.getConnection();
-    
-    // Check if event already exists
     const [existing] = await connection.query(
       "SELECT title FROM event WHERE title = ? AND semester = ?",
       [title, semester]
     );
-    
+
     if (Array.isArray(existing) && existing.length > 0) {
       return NextResponse.json(
         { success: false, error: "Event with this title already exists for the semester" },
         { status: 409 }
       );
     }
-    
-    // Insert new event and type the result
+
     const [result] = await connection.query<mysql.ResultSetHeader>(
-      "INSERT INTO event (title, amount, semester) VALUES (?, ?, ?)",
-      [title, amount, semester]
+      "INSERT INTO event (title, date, description, amount, semester) VALUES (?, ?, ?, ?, ?)",
+      [title, date, description, amount, semester]
     );
-    
+
     return NextResponse.json(
       { 
         success: true, 
