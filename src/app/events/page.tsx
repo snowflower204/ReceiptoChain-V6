@@ -33,7 +33,8 @@ export default function EventPage() {
       if (!res.ok) throw new Error("Failed to fetch events");
 
       const data = await res.json();
-      setEvents(Array.isArray(data) ? data : []);
+      setEvents(Array.isArray(data.data) ? data.data : []);
+
     } catch (err) {
       console.error("Failed to fetch events", err);
       setError("Failed to load events. Please try again.");

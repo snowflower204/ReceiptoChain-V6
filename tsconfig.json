@@ -22,6 +22,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/navbar.js", "src/app/sidebar.js", "src/app/not used/QRScanner.tsx", "src/app/backend/routes/FilterOptions.tsx", "src/app/api/records/route.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/navbar.js", "src/app/sidebar.js", "src/app/not used/QRScanner.tsx", "src/app/backend/routes/FilterOptions.tsx", "src/app/api/records/route.ts", "src/app/api/events/route.ts"],
   "exclude": ["node_modules"]
 }
