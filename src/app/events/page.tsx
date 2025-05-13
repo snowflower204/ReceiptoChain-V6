@@ -90,7 +90,7 @@ export default function EventPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${form.eventID}`, { method: "DELETE" });
+     const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete event");
       await fetchEvents();
     } catch (err) {
@@ -350,4 +350,5 @@ export default function EventPage() {
       </div>
     </div>
   );
+
 }

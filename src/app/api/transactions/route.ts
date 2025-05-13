@@ -11,11 +11,7 @@ const dbConfig = {
 };
 
 // Helper function to build the SQL query with dynamic filters
-const buildTransactionQuery = (filters: { 
-  studentID: string; 
-  eventID: string; 
-  paymentMethod: string 
-}) => {
+const buildTransactionQuery = (filters: { studentID: string; paymentMethod: string }) => {
   let sqlQuery = `
     SELECT
       t.transactionID,
@@ -23,21 +19,17 @@ const buildTransactionQuery = (filters: {
       t.paymentMethod,
       t.receiptNumber,
       t.status,
+      t.total_amount,
       s.IDnumber,
       s.firstName,
       s.lastName,
       s.course,
       s.year,
-      e.eventID,
-      e.title AS eventTitle,
-      e.amount AS eventAmount,
-      e.semester
-    FROM
-      transactions t
-    JOIN
-      student s ON t.studentID = s.studentID
-    LEFT JOIN
-      event e ON t.eventID = e.eventID
+      GROUP_CONCAT(e.title ORDER BY e.title ASC SEPARATOR ', ') AS eventsPaid
+    FROM transactions t
+    JOIN student s ON t.studentID = s.studentID
+    JOIN transaction_events te ON t.transactionID = te.transactionID
+    JOIN event e ON te.eventID = e.eventID
     WHERE 1=1
   `;
 
@@ -47,277 +39,101 @@ const buildTransactionQuery = (filters: {
     sqlQuery += ` AND s.IDnumber = ?`;
     values.push(filters.studentID);
   }
-  if (filters.eventID !== 'All') {
-    sqlQuery += ` AND e.eventID = ?`;
-    values.push(filters.eventID);
-  }
   if (filters.paymentMethod !== 'All') {
     sqlQuery += ` AND t.paymentMethod = ?`;
     values.push(filters.paymentMethod);
   }
 
-  sqlQuery += " ORDER BY t.date DESC";
+  sqlQuery += " GROUP BY t.transactionID ORDER BY t.date DESC";
 
   return { sqlQuery, values };
 };
 
-// GET: Fetch transactions
+// ✅ **GET: Fetch Transactions & Events Paid**
 export async function GET(request: NextRequest) {
   let connection;
 
   try {
     connection = await mysql.createConnection(dbConfig);
-    
-    // Check if tables exist
-    const [tables] = await connection.execute(`
-      SELECT 
-        table_name 
-      FROM 
-        information_schema.tables 
-      WHERE 
-        table_schema = ? AND 
-        table_name IN ('transactions', 'student', 'event')
-    `, [dbConfig.database]);
-
-    if (!Array.isArray(tables) || tables.length < 3) {
-      return NextResponse.json(
-        { error: 'Required database tables are missing' }, 
-        { status: 500 }
-      );
-    }
-
-    // Extract filters from URL search parameters
     const { searchParams } = new URL(request.url);
     const studentID = searchParams.get('studentID') || 'All';
-    const eventID = searchParams.get('eventID') || 'All';
     const paymentMethod = searchParams.get('paymentMethod') || 'All';
 
-    // Build SQL query with dynamic filters
-    const { sqlQuery, values } = buildTransactionQuery({
-      studentID,
-      eventID,
-      paymentMethod
-    });
+    // Build SQL query dynamically
+    const { sqlQuery, values } = buildTransactionQuery({ studentID, paymentMethod });
 
     // Execute the query
     const [rows] = await connection.execute(sqlQuery, values);
 
-    // Transform rows into proper transaction format
-    const transactions = (rows as any[]).map(row => ({
-      transactionID: row.transactionID,
-      date: row.date,
-      paymentMethod: row.paymentMethod,
-      receiptNumber: row.receiptNumber,
-      status: row.status,
-      IDnumber: row.IDnumber,
-      firstName: row.firstName,
-      lastName: row.lastName,
-      course: row.course,
-      year: row.year,
-      eventList: [{
-        title: row.eventTitle,
-        amount: row.eventAmount
-      }],
-      semester: row.semester
-    }));
-
-    return NextResponse.json({ success: true, transactions });
+    return NextResponse.json({ success: true, transactions: rows });
 
   } catch (error: unknown) {
     console.error("Database error:", error);
-    const typedError = error as Error;
-    return NextResponse.json(
-      { 
-        error: 'Failed to fetch transactions',
-        details: typedError.message,
-      }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
   } finally {
     if (connection) await connection.end();
   }
 }
 
-// POST: Insert transaction
+// ✅ **POST: Insert Transaction with Multiple Events**
 export async function POST(request: NextRequest) {
   let connection;
 
   try {
     const body = await request.json();
-    const { studentID, eventID, paymentMethod, date, receiptNumber, status } = body;
+    const { studentID, eventIDs, paymentMethod, date, receiptNumber, status } = body;
 
-    if (!studentID || !paymentMethod || !date) {
-      return NextResponse.json(
-        { error: 'Missing required fields (studentID, paymentMethod, date)' },
-        { status: 400 }
-      );
+    if (!studentID || !paymentMethod || !date || !Array.isArray(eventIDs) || eventIDs.length === 0) {
+      return NextResponse.json({ error: 'Missing required fields or events' }, { status: 400 });
     }
 
-    // Convert ISO 8601 date string to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
-    const parsedDate = new Date(date);
-    const mysqlDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ');
-
     connection = await mysql.createConnection(dbConfig);
-    
-    // First get the studentID from IDnumber if needed
+
+    // Get studentID from IDnumber
     const [studentRows] = await connection.execute(
       "SELECT studentID FROM student WHERE IDnumber = ?",
       [studentID]
     );
 
     if (!Array.isArray(studentRows) || studentRows.length === 0) {
-      return NextResponse.json(
-        { error: 'Student not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     }
 
     const actualStudentID = (studentRows[0] as any).studentID;
 
-    const insertQuery = `
-      INSERT INTO transactions 
-        (studentID, eventID, paymentMethod, date, receiptNumber, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
+    // Calculate total amount for selected events
+     const [rows] = await connection.execute(
+     "SELECT SUM(amount) AS total_amount FROM event WHERE eventID IN (?)",
+     [eventIDs]
+     );
 
-    const [result] = await connection.execute(insertQuery, [
-      actualStudentID, 
-      eventID || null, 
-      paymentMethod, 
-      mysqlDate, 
-      receiptNumber || null, 
-      status || 'pending'
+     // Ensure data exists before accessing `.total_amount`
+     const totalAmount = (rows as Array<{ total_amount: number }>)[0]?.total_amount || 0.00;
+
+
+
+    // Insert transaction
+    const [result] = await connection.execute(`
+      INSERT INTO transactions (studentID, paymentMethod, date, receiptNumber, status, total_amount)
+      VALUES (?, ?, ?, ?, ?, ?)`, [
+      actualStudentID, paymentMethod, date, receiptNumber || null, status || 'pending', totalAmount
     ]);
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Transaction inserted successfully.',
-      transactionID: (result as any).insertId 
-    });
+    const newTransactionID = (result as any).insertId;
+
+    // Insert event selection in `transaction_events`
+    for (const eventID of eventIDs) {
+      await connection.execute(`
+        INSERT INTO transaction_events (transactionID, eventID)
+        VALUES (?, ?)`, [newTransactionID, eventID]
+      );
+    }
+
+    return NextResponse.json({ success: true, message: 'Transaction created successfully.', transactionID: newTransactionID });
 
   } catch (error: unknown) {
-    const typedError = error as Error;
-    return NextResponse.json(
-      { 
-        error: 'Failed to insert transaction', 
-        details: typedError.message 
-      }, 
-      { status: 500 }
-    );
-  } finally {
-    if (connection) await connection.end();
-  }
-}
-
-// PUT: Update transaction
-export async function PUT(request: NextRequest) {
-  let connection;
-
-  try {
-    const body = await request.json();
-    const { transactionID, paymentMethod, status } = body;
-
-    if (!transactionID) {
-      return NextResponse.json(
-        { error: 'Transaction ID is required' },
-        { status: 400 }
-      );
-    }
-
-    connection = await mysql.createConnection(dbConfig);
-    let updateQuery = `UPDATE transactions SET `;
-    const values = [];
-    const setClauses = [];
-
-    if (paymentMethod) {
-      setClauses.push('paymentMethod = ?');
-      values.push(paymentMethod);
-    }
-    if (status) {
-      setClauses.push('status = ?');
-      values.push(status);
-    }
-
-    if (setClauses.length === 0) {
-      return NextResponse.json(
-        { error: 'No fields to update' },
-        { status: 400 }
-      );
-    }
-
-    updateQuery += setClauses.join(', ');
-    updateQuery += ' WHERE transactionID = ?';
-    values.push(transactionID);
-
-    const [result] = await connection.execute(updateQuery, values);
-
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { error: 'Transaction not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Transaction updated successfully.' 
-    });
-
-  } catch (error: unknown) {
-    const typedError = error as Error;
-    return NextResponse.json(
-      { 
-        error: 'Failed to update transaction', 
-        details: typedError.message 
-      }, 
-      { status: 500 }
-    );
-  } finally {
-    if (connection) await connection.end();
-  }
-}
-
-// DELETE: Remove transaction
-export async function DELETE(request: NextRequest) {
-  let connection;
-
-  try {
-    const { searchParams } = new URL(request.url);
-    const transactionID = searchParams.get('transactionID');
-
-    if (!transactionID) {
-      return NextResponse.json(
-        { error: 'Transaction ID is required for deletion' }, 
-        { status: 400 }
-      );
-    }
-
-    connection = await mysql.createConnection(dbConfig);
-    const deleteQuery = `DELETE FROM transactions WHERE transactionID = ?`;
-
-    const [result] = await connection.execute(deleteQuery, [transactionID]);
-
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { error: 'Transaction not found' }, 
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Transaction deleted successfully.' 
-    });
-
-  } catch (error: unknown) {
-    const typedError = error as Error;
-    return NextResponse.json(
-      { 
-        error: 'Failed to delete transaction', 
-        details: typedError.message 
-      }, 
-      { status: 500 }
-    );
+    console.error("Error inserting transaction:", error);
+    return NextResponse.json({ error: 'Failed to insert transaction' }, { status: 500 });
   } finally {
     if (connection) await connection.end();
   }
