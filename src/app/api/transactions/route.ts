@@ -21,14 +21,14 @@ const buildTransactionQuery = (filters: { studentID: string; paymentMethod: stri
       t.status,
       t.total_amount,
       s.IDnumber,
-      s.firstName,
-      s.lastName,
-      s.course,
-      s.year,
+      s.FirstName,
+      s.LastName,
+      s.Course,
+      s.Year,
       GROUP_CONCAT(e.title ORDER BY e.title ASC SEPARATOR ', ') AS eventsPaid
     FROM transactions t
     JOIN student s ON t.studentID = s.studentID
-    JOIN transaction_events te ON t.transactionID = te.transactionID
+    JOIN transactions_event te ON t.transactionID = te.transactionID
     JOIN event e ON te.eventID = e.eventID
     WHERE 1=1
   `;
@@ -49,7 +49,7 @@ const buildTransactionQuery = (filters: { studentID: string; paymentMethod: stri
   return { sqlQuery, values };
 };
 
-// ✅ **GET: Fetch Transactions & Events Paid**
+// **GET: Fetch Transactions & Events Paid**
 export async function GET(request: NextRequest) {
   let connection;
 
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ✅ **POST: Insert Transaction with Multiple Events**
+// **POST: Insert Transaction with Multiple Events**
 export async function POST(request: NextRequest) {
   let connection;
 
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Insert event selection in `transaction_events`
     for (const eventID of eventIDs) {
       await connection.execute(`
-        INSERT INTO transaction_events (transactionID, eventID)
+       INSERT INTO transactions_event (transactionID, eventID)
         VALUES (?, ?)`, [newTransactionID, eventID]
       );
     }
