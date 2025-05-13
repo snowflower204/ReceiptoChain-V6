@@ -153,6 +153,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Convert ISO 8601 date string to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+    const parsedDate = new Date(date);
+    const mysqlDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ');
+
     connection = await mysql.createConnection(dbConfig);
     
     // First get the studentID from IDnumber if needed
@@ -180,7 +184,7 @@ export async function POST(request: NextRequest) {
       actualStudentID, 
       eventID || null, 
       paymentMethod, 
-      date, 
+      mysqlDate, 
       receiptNumber || null, 
       status || 'pending'
     ]);
@@ -221,18 +225,28 @@ export async function PUT(request: NextRequest) {
     }
 
     connection = await mysql.createConnection(dbConfig);
-    const updateQuery = `
-      UPDATE transactions
-      SET 
-        ${paymentMethod ? 'paymentMethod = ?' : ''}
-        ${paymentMethod && status ? ', ' : ''}
-        ${status ? 'status = ?' : ''}
-      WHERE transactionID = ?
-    `;
-
+    let updateQuery = `UPDATE transactions SET `;
     const values = [];
-    if (paymentMethod) values.push(paymentMethod);
-    if (status) values.push(status);
+    const setClauses = [];
+
+    if (paymentMethod) {
+      setClauses.push('paymentMethod = ?');
+      values.push(paymentMethod);
+    }
+    if (status) {
+      setClauses.push('status = ?');
+      values.push(status);
+    }
+
+    if (setClauses.length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    updateQuery += setClauses.join(', ');
+    updateQuery += ' WHERE transactionID = ?';
     values.push(transactionID);
 
     const [result] = await connection.execute(updateQuery, values);

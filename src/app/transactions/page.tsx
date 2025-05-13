@@ -15,6 +15,9 @@ interface Transaction {
   receiptNumber: string;
   status: string;
   totalAmount: number;
+  IDnumber: string;
+  firstName: string;
+  lastName: string;
 }
 
 interface Student {
@@ -49,6 +52,7 @@ const TransactionsPage = () => {
   const initialStudentID = searchParams.get("studentID") || "";
 
   useEffect(() => {
+    setEvents([...events]);
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -62,21 +66,51 @@ const TransactionsPage = () => {
           throw new Error("Failed to fetch data.");
         }
 
+        const fetchData = async (
+          url: string,
+          setState: Function,
+          key: string
+        ) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Error fetching ${key}`);
+
+            const data = await res.json();
+            const arrayData = key === "events" ? data.data : data[key];
+
+            setState(Array.isArray(arrayData) ? arrayData : []);
+          } catch (error) {
+            console.error(`Error fetching ${key}:`, error);
+            setState([]);
+          }
+        };
+
         const transactionsData = await transactionsRes.json();
         const studentsData = await studentsRes.json();
         const eventsData = await eventsRes.json();
 
-        setTransactions(transactionsData.transactions || []);
-        setStudents(studentsData.students || []);
-        setEvents(eventsData.events || []);
+        setTransactions(
+          Array.isArray(transactionsData.transactions)
+            ? transactionsData.transactions
+            : []
+        );
+        setStudents(
+          Array.isArray(studentsData.students) ? studentsData.students : []
+        );
+        setEvents(Array.isArray(eventsData.data) ? eventsData.data : []);
+
 
         if (initialStudentID) {
-          const foundStudent = studentsData.students?.find((s: Student) => s.IDnumber === initialStudentID);
+          const foundStudent = studentsData.students?.find(
+            (s: Student) => s.IDnumber === initialStudentID
+          );
           if (foundStudent) setSelectedStudent(foundStudent);
           setStudentID(initialStudentID);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred");
+        setError(
+          err instanceof Error ? err.message : "An unknown error occurred"
+        );
         toast.error("Failed to load data.");
       } finally {
         setLoading(false);
@@ -97,39 +131,67 @@ const TransactionsPage = () => {
   };
 
   const handlePayment = async () => {
-    if (!selectedStudent || selectedEvents.length === 0 || !paymentMethod || !receiptNumber) {
+    if (
+      !selectedStudent ||
+      selectedEvents.length === 0 ||
+      !paymentMethod ||
+      !receiptNumber
+    ) {
       toast.error("Please complete all fields.");
       return;
     }
 
-    const totalAmount = selectedEvents.reduce((sum: number, e: Event) => sum + e.amount, 0);
-
     try {
       setLoading(true);
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const insertedTransactions = [];
+      for (const event of selectedEvents) {
+        const response = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentID: selectedStudent.IDnumber,
+            eventID: event.eventID,
+            paymentMethod,
+            receiptNumber,
+            date: new Date().toISOString(),
+            status: "paid",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+
+        const data = await response.json();
+        insertedTransactions.push({
+          transactionID: data.transactionID,
           studentID: selectedStudent.IDnumber,
-          events: selectedEvents,
+          eventID: event.eventID,
           paymentMethod,
           receiptNumber,
-          totalAmount,
-        }),
-      });
+          date: new Date().toISOString(),
+          status: "paid",
+          totalAmount: event.amount,
+          IDnumber: selectedStudent.IDnumber,
+          firstName: selectedStudent.FirstName,
+          lastName: selectedStudent.LastName,
+        });
+      }
 
-      if (!response.ok) throw new Error(await response.text());
-
-      toast.success(`Payment of ₱${totalAmount} processed successfully`);
-
-      const refresh = await fetch("/api/transactions");
-      const updated = await refresh.json();
-      setTransactions(updated.transactions || []);
+      // Optimistically update transactions state with inserted transactions
+      setTransactions((prev) => [...insertedTransactions, ...prev]);
       setSelectedEvents([]);
       setPaymentMethod("");
       setReceiptNumber("");
+
+      toast.success(`Payment of ₱${selectedEvents.reduce((sum, e) => sum + e.amount, 0)} processed successfully`);
     } catch (err) {
-      toast.error(`Payment failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+      toast.error(
+        `Payment failed: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
     } finally {
       setLoading(false);
     }
@@ -152,7 +214,9 @@ const TransactionsPage = () => {
       <Sidebar />
       <div className="flex flex-1 justify-end p-4">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-[1000px]">
-          <h1 className="text-3xl font-bold mb-6 text-center">Transaction Page</h1>
+          <h1 className="text-3xl font-bold mb-6 text-center">
+            Transaction Page
+          </h1>
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -192,7 +256,9 @@ const TransactionsPage = () => {
             {selectedStudent && (
               <div className="mt-4 p-4 border rounded bg-gray-50">
                 <h3 className="font-semibold">Student Information</h3>
-                <p>Name: {selectedStudent.FirstName} {selectedStudent.LastName}</p>
+                <p>
+                  Name: {selectedStudent.FirstName} {selectedStudent.LastName}
+                </p>
                 <p>Course: {selectedStudent.Course}</p>
                 <p>Year: {selectedStudent.Year}</p>
               </div>
@@ -202,21 +268,32 @@ const TransactionsPage = () => {
           {/* Event Selection Section */}
           {selectedStudent && (
             <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-2">Select Events to Pay</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                Select Events to Pay
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {events.map((event) => (
-                  <div key={event.eventID} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id={`event-${event.eventID}`}
-                      checked={selectedEvents.some((e) => e.eventID === event.eventID)}
-                      onChange={() => handleEventSelection(event)}
-                    />
-                    <label htmlFor={`event-${event.eventID}`} className="ml-2">
-                      {event.title} - ₱{event.amount}
-                    </label>
-                  </div>
-                ))}
+                {events.length > 0 ? (
+                  events.map((event) => (
+                    <div key={event.eventID} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`event-${event.eventID}`}
+                        checked={selectedEvents.some(
+                          (e) => e.eventID === event.eventID
+                        )}
+                        onChange={() => handleEventSelection(event)}
+                      />
+                      <label
+                        htmlFor={`event-${event.eventID}`}
+                        className="ml-2"
+                      >
+                        {event.title} - ₱{event.amount}
+                      </label>
+                    </div>
+                  ))
+                ) : (
+                  <p>No events available.</p>
+                )}
               </div>
             </div>
           )}
@@ -224,19 +301,41 @@ const TransactionsPage = () => {
           {/* Transaction History Section */}
           {selectedStudent && (
             <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-2">Transaction History</h2>
-              <div className="space-y-4">
-                {transactions
-                  .filter((transaction) => transaction.studentID === selectedStudent.IDnumber)
-                  .map((transaction) => (
-                    <div key={transaction.transactionID} className="border p-4 rounded-lg bg-gray-50">
-                      <p><strong>Date:</strong> {transaction.date}</p>
-                      <p><strong>Payment Method:</strong> {transaction.paymentMethod}</p>
-                      <p><strong>Receipt Number:</strong> {transaction.receiptNumber}</p>
-                      <p><strong>Total Amount:</strong> ₱{transaction.totalAmount}</p>
-                      <p><strong>Status:</strong> {transaction.status}</p>
-                    </div>
-                  ))}
+              <h2 className="text-xl font-semibold mb-2">
+                Transaction History
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-sm">
+                  <thead>
+                    <tr className="bg-gray-200 text-center">
+                      <th className="border px-4 py-2">Student ID</th>
+                      <th className="border px-4 py-2">Name</th>
+                      <th className="border px-4 py-2">Date</th>
+                      <th className="border px-4 py-2">Payment Method</th>
+                      <th className="border px-4 py-2">Receipt Number</th>
+                      <th className="border px-4 py-2">Total Amount</th>
+                      <th className="border px-4 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions
+                      .filter(
+                        (transaction) =>
+                          transaction.IDnumber === selectedStudent.IDnumber
+                      )
+                      .map((transaction) => (
+                        <tr key={transaction.transactionID} className="text-center">
+                          <td className="border px-4 py-2">{transaction.IDnumber}</td>
+                          <td className="border px-4 py-2">{transaction.firstName} {transaction.lastName}</td>
+                          <td className="border px-4 py-2">{transaction.date}</td>
+                          <td className="border px-4 py-2">{transaction.paymentMethod}</td>
+                          <td className="border px-4 py-2">{transaction.receiptNumber}</td>
+                          <td className="border px-4 py-2">₱{transaction.totalAmount}</td>
+                          <td className="border px-4 py-2">{transaction.status}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -274,7 +373,12 @@ const TransactionsPage = () => {
               <button
                 onClick={handlePayment}
                 className="bg-green-500 text-white px-6 py-2 rounded"
-                disabled={loading || selectedEvents.length === 0 || !paymentMethod || !receiptNumber}
+                disabled={
+                  loading ||
+                  selectedEvents.length === 0 ||
+                  !paymentMethod ||
+                  !receiptNumber
+                }
               >
                 {loading ? "Processing..." : "Pay"}
               </button>
