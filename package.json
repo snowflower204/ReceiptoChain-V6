@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -19,7 +20,7 @@
     "formidable": "^3.5.4",
     "html2canvas": "^1.4.1",
     "mysql2": "^3.14.1",
-    "next": "15.3.1",
+    "next": "^15.3.8",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",

@@ -54,21 +54,24 @@ async function main(): Promise<void> {
   );
 
   const user = await prisma.user.upsert({
-    where: {
-      email: adminEmail,
-    },
-    update: {
-      passwordHash,
-    },
-    create: {
-      email: adminEmail,
-      passwordHash,
-    },
-    select: {
-      id: true,
-      email: true,
-    },
-  });
+  where: {
+    email: adminEmail,
+  },
+  update: {
+    passwordHash,
+    platformRole: "PLATFORM_ADMIN",
+  },
+  create: {
+    email: adminEmail,
+    passwordHash,
+    platformRole: "PLATFORM_ADMIN",
+  },
+  select: {
+    id: true,
+    email: true,
+    platformRole: true,
+  },
+});
 
   console.log(`User ready: ${user.email}`);
 }
