@@ -1,152 +1,254 @@
-import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
+function getErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error
+  ) {
+    return String(error.code);
+  }
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '123456789',
-  database: 'dbreceipt',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-};
+  return null;
+}
 
-const pool = mysql.createPool(dbConfig);
+function parseEventId(rawId: string) {
+  const id = Number(rawId);
 
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
 
+  return id;
+}
+
+function formatEvent(event: {
+  id: number;
+  title: string;
+  date: Date;
+  description: string | null;
+  amount: { toString(): string };
+  semester: string;
+}) {
+  return {
+    eventID: event.id,
+    title: event.title,
+    date: event.date.toISOString().split("T")[0],
+    description: event.description ?? "",
+    amount: Number(event.amount.toString()),
+    semester: event.semester,
+  };
+}
 
 // GET /api/events/[id]
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  let connection;
+  const { id: rawId } = await params;
+  const id = parseEventId(rawId);
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Invalid event ID" },
+      { status: 400 }
+    );
+  }
 
   try {
-    connection = await pool.getConnection();
+    const event = await prisma.event.findUnique({
+      where: {
+        id,
+      },
+    });
 
-    const [rows] = await connection.query(
-      "SELECT * FROM event WHERE eventID = ?",
-      [id]
-    );
-
-    if (!Array.isArray(rows) || rows.length === 0) {
+    if (!event) {
       return NextResponse.json(
         { error: "Event not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(rows[0]);
-  } catch (err) {
-    console.error("Database error:", err);
+    return NextResponse.json(formatEvent(event));
+  } catch (error: unknown) {
+    console.error("Error fetching event:", error);
 
     return NextResponse.json(
-      { error: "Database error" },
+      { error: "Failed to fetch event" },
       { status: 500 }
     );
-  } finally {
-    connection?.release();
   }
 }
 
-
-
 // PUT /api/events/[id]
 export async function PUT(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const data = await req.json();
-  let connection;
+  const { id: rawId } = await params;
+  const id = parseEventId(rawId);
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Invalid event ID" },
+      { status: 400 }
+    );
+  }
 
   try {
-    connection = await pool.getConnection();
+    const body = await request.json();
 
-    await connection.execute(
-      `UPDATE event
-       SET title = ?, date = ?, description = ?, amount = ?, semester = ?
-       WHERE eventID = ?`,
-      [
-        data.title,
-        data.date,
-        data.description,
-        data.amount,
-        data.semester,
-        id,
-      ]
+    const title = String(body.title ?? "").trim();
+    const dateText = String(body.date ?? "").trim();
+    const description = String(body.description ?? "").trim();
+    const semester = String(body.semester ?? "").trim();
+    const amount = Number(body.amount);
+
+    if (
+      !title ||
+      !dateText ||
+      !semester ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return NextResponse.json(
+        { error: "Missing or invalid required fields" },
+        { status: 400 }
+      );
+    }
+
+    const eventDate = new Date(
+      dateText.length === 10
+        ? `${dateText}T00:00:00.000Z`
+        : dateText
     );
+
+    if (Number.isNaN(eventDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid event date" },
+        { status: 400 }
+      );
+    }
+
+    const duplicateEvent = await prisma.event.findFirst({
+      where: {
+        title,
+        semester,
+        NOT: {
+          id,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (duplicateEvent) {
+      return NextResponse.json(
+        {
+          error:
+            "Event with this title already exists for the semester",
+        },
+        { status: 409 }
+      );
+    }
+
+    const event = await prisma.event.update({
+      where: {
+        id,
+      },
+      data: {
+        title,
+        date: eventDate,
+        description: description || null,
+        amount,
+        semester,
+      },
+    });
 
     return NextResponse.json({
       message: "Event updated successfully",
+      event: formatEvent(event),
     });
-  } catch (err) {
-    console.error("Error updating event:", err);
+  } catch (error: unknown) {
+    if (getErrorCode(error) === "P2025") {
+      return NextResponse.json(
+        { error: "Event not found" },
+        { status: 404 }
+      );
+    }
+
+    console.error("Error updating event:", error);
 
     return NextResponse.json(
       { error: "Failed to update event" },
       { status: 500 }
     );
-  } finally {
-    connection?.release();
   }
 }
 
-
-
-
 // DELETE /api/events/[id]
 export async function DELETE(
-  req: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: rawId } = await params;
-  const id = Number(rawId);
+  const id = parseEventId(rawId);
 
-  if (Number.isNaN(id) || id <= 0) {
+  if (!id) {
     return NextResponse.json(
-      { success: false, error: "Invalid event ID" },
+      {
+        success: false,
+        error: "Invalid event ID",
+      },
       { status: 400 }
     );
   }
 
-  let connection;
-
   try {
-    connection = await pool.getConnection();
-
-    const [existing] = await connection.query(
-      "SELECT * FROM event WHERE eventID = ?",
-      [id]
-    );
-
-    if (!Array.isArray(existing) || existing.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "Event not found" },
-        { status: 404 }
-      );
-    }
-
-    await connection.execute(
-      "DELETE FROM event WHERE eventID = ?",
-      [id]
-    );
+    await prisma.event.delete({
+      where: {
+        id,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       message: "Event deleted successfully",
     });
   } catch (error: unknown) {
+    const errorCode = getErrorCode(error);
+
+    if (errorCode === "P2025") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Event not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (errorCode === "P2003") {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This event cannot be deleted because it is used in a transaction.",
+        },
+        { status: 409 }
+      );
+    }
+
     console.error("Error deleting event:", error);
 
     return NextResponse.json(
-      { success: false, error: "Failed to delete event" },
+      {
+        success: false,
+        error: "Failed to delete event",
+      },
       { status: 500 }
     );
-  } finally {
-    connection?.release();
   }
 }
