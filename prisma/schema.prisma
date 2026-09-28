@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  platformRole PlatformRole @default(USER) @map("platform_role")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  memberships BusinessMember[]
+
+  @@map("users")
+}
+
+model Student {
+  id           Int           @id @default(autoincrement())
+  idNumber     String        @unique @map("id_number")
+  firstName    String        @map("first_name")
+  lastName     String        @map("last_name")
+  course       String
+  year         String
+  qrToken      String        @unique @default(uuid()) @map("qr_token")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+
+  @@map("students")
+}
+
+model Event {
+  id                Int                @id @default(autoincrement())
+  title             String
+  date              DateTime           @db.Date
+  description       String?
+  amount            Decimal            @db.Decimal(10, 2)
+  semester          String
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  transactionEvents TransactionEvent[]
+
+  @@map("events")
+}
+
+model Transaction {
+  id                Int                @id @default(autoincrement())
+  studentId         Int                @map("student_id")
+  paymentMethod     String             @map("payment_method")
+  date              DateTime           @db.Date
+  receiptNumber     String?            @unique @map("receipt_number")
+  status            String             @default("pending")
+  totalAmount       Decimal            @map("total_amount") @db.Decimal(10, 2)
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  student           Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  transactionEvents TransactionEvent[]
+
+  @@index([studentId])
+  @@index([date])
+  @@map("transactions")
+}
+
+model TransactionEvent {
+  transactionId Int         @map("transaction_id")
+  eventId       Int         @map("event_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@id([transactionId, eventId])
+  @@index([eventId])
+  @@map("transaction_events")
+}
+
+model Business {
+  id                 Int            @id @default(autoincrement())
+  name               String
+  slug               String         @unique
+  legalName          String?        @map("legal_name")
+  countryCode        String         @default("PH") @map("country_code") @db.VarChar(2)
+  defaultCurrency    String         @default("PHP") @map("default_currency") @db.VarChar(3)
+  timezone           String         @default("Asia/Manila")
+  registrationNumber String?        @map("registration_number")
+  taxId              String?        @map("tax_id")
+  status             BusinessStatus @default(ACTIVE)
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  memberships BusinessMember[]
+  invitations BusinessInvitation[]
+
+  @@index([status])
+  @@index([countryCode])
+  @@map("businesses")
+}
+
+model BusinessMember {
+  userId     Int                @map("user_id")
+  businessId Int                @map("business_id")
+  role       BusinessMemberRole @default(STAFF)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([userId, businessId])
+  @@index([businessId])
+  @@map("business_members")
+}
+
+model BusinessInvitation {
+  id         Int                @id @default(autoincrement())
+  businessId Int                @map("business_id")
+  codeHash   String             @unique @map("code_hash")
+  role       BusinessMemberRole @default(STAFF)
+  expiresAt  DateTime?          @map("expires_at")
+  maxUses    Int                @default(1) @map("max_uses")
+  usedCount  Int                @default(0) @map("used_count")
+  active     Boolean            @default(true)
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([active])
+  @@map("business_invitations")
+}
+
+enum PlatformRole {
+  USER
+  PLATFORM_ADMIN
+}
+
+enum BusinessMemberRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum BusinessStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}

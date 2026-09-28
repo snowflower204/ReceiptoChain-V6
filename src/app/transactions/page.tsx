@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "@/app/sidebar";
 import { toast } from "react-toastify";
@@ -37,7 +37,7 @@ interface Event {
   date: string;
 }
 
-const TransactionsPage = () => {
+const TransactionsContent = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -305,4 +305,10 @@ const TransactionsPage = () => {
   );
 };
 
-export default TransactionsPage;
+export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading transactions...</div>}>
+      <TransactionsContent />
+    </Suspense>
+  );
+}
