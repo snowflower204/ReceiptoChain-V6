@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import Footer from "./footer";
+import AppChrome from "@/components/AppChrome";
 import "./globals.css";
-import Navbar from "./navbar";
+
 import 'react-toastify/dist/ReactToastify.css';
 
 const inter = Inter({
@@ -28,9 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased scroll-smooth`}>
-        <Navbar />
-        <main className="pt-20 min-h-screen">{children}</main>
-        <Footer />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );
