@@ -1,140 +1,291 @@
 import { NextRequest, NextResponse } from "next/server";
-import mysql from "mysql2/promise";
+import { prisma } from "@/lib/prisma";
 
-// Database configuration
-const dbConfig = {
-  host: "localhost",
-  port: 3306,
-  user: "root",
-  password: "123456789",
-  database: "dbreceipt",
-};
-
-// Helper function to build the SQL query with dynamic filters
-const buildTransactionQuery = (filters: { studentID: string; paymentMethod: string }) => {
-  let sqlQuery = `
-    SELECT
-      t.transactionID,
-      t.date,
-      t.paymentMethod,
-      t.receiptNumber,
-      t.status,
-      t.total_amount,
-      s.IDnumber,
-      s.FirstName,
-      s.LastName,
-      s.Course,
-      s.Year,
-      GROUP_CONCAT(e.title ORDER BY e.title ASC SEPARATOR ', ') AS eventsPaid
-    FROM transactions t
-    JOIN student s ON t.studentID = s.studentID
-    JOIN transactions_event te ON t.transactionID = te.transactionID
-    JOIN event e ON te.eventID = e.eventID
-    WHERE 1=1
-  `;
-
-  const values: Array<any> = [];
-
-  if (filters.studentID !== 'All') {
-    sqlQuery += ` AND s.IDnumber = ?`;
-    values.push(filters.studentID);
-  }
-  if (filters.paymentMethod !== 'All') {
-    sqlQuery += ` AND t.paymentMethod = ?`;
-    values.push(filters.paymentMethod);
+function getErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error
+  ) {
+    return String(error.code);
   }
 
-  sqlQuery += " GROUP BY t.transactionID ORDER BY t.date DESC";
+  return null;
+}
 
-  return { sqlQuery, values };
-};
+function parseDate(dateText: string) {
+  const date = new Date(
+    dateText.length === 10
+      ? `${dateText}T00:00:00.000Z`
+      : dateText
+  );
 
-// **GET: Fetch Transactions & Events Paid**
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+// GET /api/transactions
 export async function GET(request: NextRequest) {
-  let connection;
-
   try {
-    connection = await mysql.createConnection(dbConfig);
     const { searchParams } = new URL(request.url);
-    const studentID = searchParams.get('studentID') || 'All';
-    const paymentMethod = searchParams.get('paymentMethod') || 'All';
 
-    // Build SQL query dynamically
-    const { sqlQuery, values } = buildTransactionQuery({ studentID, paymentMethod });
+    const studentID = searchParams.get("studentID") || "All";
+    const paymentMethod =
+      searchParams.get("paymentMethod") || "All";
 
-    // Execute the query
-    const [rows] = await connection.execute(sqlQuery, values);
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        ...(studentID !== "All"
+          ? {
+              student: {
+                idNumber: studentID,
+              },
+            }
+          : {}),
+        ...(paymentMethod !== "All"
+          ? {
+              paymentMethod,
+            }
+          : {}),
+      },
+      include: {
+        student: true,
+        transactionEvents: {
+          include: {
+            event: true,
+          },
+        },
+      },
+      orderBy: {
+        date: "desc",
+      },
+    });
 
-    return NextResponse.json({ success: true, transactions: rows });
+    const formattedTransactions = transactions.map(
+      (transaction) => {
+        const totalAmount = Number(
+          transaction.totalAmount.toString()
+        );
 
+        const eventsPaid = transaction.transactionEvents
+          .map((item) => item.event.title)
+          .sort((first, second) =>
+            first.localeCompare(second)
+          )
+          .join(", ");
+
+        return {
+          transactionID: transaction.id,
+          studentID: transaction.studentId,
+          date: transaction.date.toISOString().split("T")[0],
+          paymentMethod: transaction.paymentMethod,
+          receiptNumber: transaction.receiptNumber,
+          status: transaction.status,
+
+          // Keep both names temporarily for frontend compatibility.
+          totalAmount,
+          total_amount: totalAmount,
+
+          eventsPaid,
+
+          IDnumber: transaction.student.idNumber,
+          FirstName: transaction.student.firstName,
+          LastName: transaction.student.lastName,
+          Course: transaction.student.course,
+          Year: transaction.student.year,
+
+          firstName: transaction.student.firstName,
+          lastName: transaction.student.lastName,
+        };
+      }
+    );
+
+    return NextResponse.json({
+      success: true,
+      transactions: formattedTransactions,
+    });
   } catch (error: unknown) {
-    console.error("Database error:", error);
-    return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
-  } finally {
-    if (connection) await connection.end();
+    console.error("Error fetching transactions:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch transactions",
+      },
+      { status: 500 }
+    );
   }
 }
 
-// **POST: Insert Transaction with Multiple Events**
+// POST /api/transactions
 export async function POST(request: NextRequest) {
-  let connection;
-
   try {
     const body = await request.json();
-    const { studentID, eventIDs, paymentMethod, date, receiptNumber, status } = body;
 
-    if (!studentID || !paymentMethod || !date || !Array.isArray(eventIDs) || eventIDs.length === 0) {
-      return NextResponse.json({ error: 'Missing required fields or events' }, { status: 400 });
-    }
+    const studentID = String(body.studentID ?? "").trim();
+    const paymentMethod = String(
+      body.paymentMethod ?? ""
+    ).trim();
+    const dateText = String(body.date ?? "").trim();
+    const receiptNumber = body.receiptNumber
+      ? String(body.receiptNumber).trim()
+      : null;
+    const status = String(
+      body.status ?? "pending"
+    ).trim();
 
-    connection = await mysql.createConnection(dbConfig);
-
-    // Get studentID from IDnumber
-    const [studentRows] = await connection.execute(
-      "SELECT studentID FROM student WHERE IDnumber = ?",
-      [studentID]
-    );
-
-    if (!Array.isArray(studentRows) || studentRows.length === 0) {
-      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-    }
-
-    const actualStudentID = (studentRows[0] as any).studentID;
-
-    // Calculate total amount for selected events
-     const [rows] = await connection.execute(
-     "SELECT SUM(amount) AS total_amount FROM event WHERE eventID IN (?)",
-     [eventIDs]
-     );
-
-     // Ensure data exists before accessing `.total_amount`
-     const totalAmount = (rows as Array<{ total_amount: number }>)[0]?.total_amount || 0.00;
-
-
-
-    // Insert transaction
-    const [result] = await connection.execute(`
-      INSERT INTO transactions (studentID, paymentMethod, date, receiptNumber, status, total_amount)
-      VALUES (?, ?, ?, ?, ?, ?)`, [
-      actualStudentID, paymentMethod, date, receiptNumber || null, status || 'pending', totalAmount
-    ]);
-
-    const newTransactionID = (result as any).insertId;
-
-    // Insert event selection in `transaction_events`
-    for (const eventID of eventIDs) {
-      await connection.execute(`
-       INSERT INTO transactions_event (transactionID, eventID)
-        VALUES (?, ?)`, [newTransactionID, eventID]
+    if (
+      !studentID ||
+      !paymentMethod ||
+      !dateText ||
+      !Array.isArray(body.eventIDs) ||
+      body.eventIDs.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields or events",
+        },
+        { status: 400 }
       );
     }
 
-    return NextResponse.json({ success: true, message: 'Transaction created successfully.', transactionID: newTransactionID });
+   const eventIDs: number[] = Array.from(
+  new Set<number>(
+    body.eventIDs.map((value: unknown) => Number(value))
+  )
+);
 
+    const containsInvalidEventID = eventIDs.some(
+      (eventID) =>
+        !Number.isInteger(eventID) || eventID <= 0
+    );
+
+    if (containsInvalidEventID) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "One or more event IDs are invalid",
+        },
+        { status: 400 }
+      );
+    }
+
+    const transactionDate = parseDate(dateText);
+
+    if (!transactionDate) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid transaction date",
+        },
+        { status: 400 }
+      );
+    }
+
+    const student = await prisma.student.findUnique({
+      where: {
+        idNumber: studentID,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!student) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Student not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    const events = await prisma.event.findMany({
+      where: {
+        id: {
+          in: eventIDs,
+        },
+      },
+      select: {
+        id: true,
+        amount: true,
+      },
+    });
+
+    if (events.length !== eventIDs.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "One or more selected events do not exist",
+        },
+        { status: 400 }
+      );
+    }
+
+    const totalCentavos = events.reduce(
+      (total, event) =>
+        total +
+        Math.round(
+          Number(event.amount.toString()) * 100
+        ),
+      0
+    );
+
+    const totalAmount = (totalCentavos / 100).toFixed(2);
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        studentId: student.id,
+        paymentMethod,
+        date: transactionDate,
+        receiptNumber: receiptNumber || null,
+        status: status || "pending",
+        totalAmount,
+        transactionEvents: {
+  create: eventIDs.map((eventID) => ({
+    event: {
+      connect: {
+        id: eventID,
+      },
+    },
+  })),
+},
+
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Transaction created successfully.",
+        transactionID: transaction.id,
+      },
+      { status: 201 }
+    );
   } catch (error: unknown) {
-    console.error("Error inserting transaction:", error);
-    return NextResponse.json({ error: 'Failed to insert transaction' }, { status: 500 });
-  } finally {
-    if (connection) await connection.end();
+    if (getErrorCode(error) === "P2002") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Receipt number already exists",
+        },
+        { status: 409 }
+      );
+    }
+
+    console.error("Error creating transaction:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to insert transaction",
+      },
+      { status: 500 }
+    );
   }
 }
