@@ -113,6 +113,16 @@ export default function Login() {
           <p className="text-xs text-gray-600 px-2">
             Secure, Smart, and Real-time Blockchain-based Receipt Verification.
           </p>
+
+          <p className="w-full text-center text-sm text-gray-700">
+  Don&apos;t have an account?{" "}
+  <Link
+    href="/signup"
+    className="font-semibold text-blue-600 hover:underline"
+  >
+    Create an account
+  </Link>
+</p>
         </div>
       </div>
     </div>
