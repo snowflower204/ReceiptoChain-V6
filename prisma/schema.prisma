@@ -146,7 +146,7 @@ model BusinessMember {
   updatedAt  DateTime           @updatedAt @map("updated_at")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
   @@id([userId, businessId])
   @@index([businessId])
@@ -187,7 +187,7 @@ model BusinessEvent {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  business       Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business       Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
   createdBy      User                   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
   budgetItems    EventBudgetItem[]
   activities     FinancialActivity[]
@@ -211,8 +211,8 @@ model EventBudgetItem {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  event      BusinessEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event      BusinessEvent       @relation(fields: [eventId], references: [id], onDelete: Restrict)
   activities FinancialActivity[]
 
   @@index([businessId, eventId])
@@ -242,8 +242,8 @@ model FinancialActivity {
   createdAt      DateTime                @default(now()) @map("created_at")
   updatedAt      DateTime                @updatedAt @map("updated_at")
 
-  business                Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  event                   BusinessEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  business                Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event                   BusinessEvent         @relation(fields: [eventId], references: [id], onDelete: Restrict)
   budgetItem              EventBudgetItem?      @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
   createdBy               User                  @relation("ActivityCreator", fields: [createdById], references: [id], onDelete: Restrict)
   confirmedBy             User?                 @relation("ActivityConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
@@ -278,9 +278,9 @@ model EvidenceDocument {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  business      Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  activity      FinancialActivity?    @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  reimbursement ReimbursementRequest? @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+  business      Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  activity      FinancialActivity?    @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  reimbursement ReimbursementRequest? @relation(fields: [reimbursementId], references: [id], onDelete: Restrict)
   reviewedBy    User?                 @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([businessId, status])
@@ -303,8 +303,8 @@ model PaymentConfirmation {
   notes         String?
   createdAt     DateTime @default(now()) @map("created_at")
 
-  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  activity    FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  activity    FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
   confirmedBy User              @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
 
   @@unique([businessId, provider, reference])
@@ -330,8 +330,8 @@ model ReimbursementRequest {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
 
-  business           Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  event              BusinessEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  business           Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event              BusinessEvent      @relation(fields: [eventId], references: [id], onDelete: Restrict)
   requester          User               @relation("ReimbursementRequester", fields: [requesterId], references: [id], onDelete: Restrict)
   reviewedBy         User?              @relation("ReimbursementReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   settlementActivity FinancialActivity? @relation("ReimbursementSettlement", fields: [settlementActivityId], references: [id], onDelete: SetNull)
@@ -358,8 +358,8 @@ model Receipt {
   voidedAt         DateTime? @map("voided_at")
   createdAt        DateTime  @default(now()) @map("created_at")
 
-  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  event    BusinessEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event    BusinessEvent     @relation(fields: [eventId], references: [id], onDelete: Restrict)
   activity FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
   issuedBy User              @relation("ReceiptIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
 
