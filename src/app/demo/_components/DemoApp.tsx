@@ -24,6 +24,16 @@ const descriptions: Record<View, string> = {
 function Badge({ children, good = false }: { children: React.ReactNode; good?: boolean }) { return <span className={`rc-badge ${good ? 'good' : ''}`}>{children}</span>; }
 function paymentLabel(r: Activity) { return r.paymentReference ? (r.kind === 'reimbursement' ? 'Volunteer payment confirmed' : 'Payment confirmed') : 'Payment not confirmed'; }
 
+function createLocalActivityId() {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return `LOCAL-${globalThis.crypto.randomUUID().slice(0, 8)}`;
+  }
+
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 10);
+  return `LOCAL-${timestamp}-${random}`;
+}
+
 export default function DemoApp({ view = 'dashboard' }: { view?: View }) {
   const [state, setState] = useState<DemoState | null>(null);
   const [error, setError] = useState('');
@@ -102,7 +112,7 @@ export default function DemoApp({ view = 'dashboard' }: { view?: View }) {
     const amountText = text('amount');
     const amount = Math.round(Number(amountText) * 100);
     if (!/^\d+(\.\d{1,2})?$/.test(amountText) || !Number.isSafeInteger(amount) || amount <= 0 || amount > 999999999 || !text('title') || !text('person') || !state.events.includes(text('event'))) { setError('Enter a title, person, event, and amount from ₱0.01 to ₱9,999,999.99 (up to two decimals).'); return; }
-    const row: Activity = { id: `LOCAL-${crypto.randomUUID().slice(0,8)}`, event: text('event'), title: text('title'), person: text('person'), kind: text('kind') as Kind, amount, date: text('date'), method: text('method'), review: 'Pending', paymentReference: '', approval: 'Pending', repaymentReference: '', reconciliationReference: '', history: [{ at: new Date().toISOString(), message: 'Demo activity created locally.' }] };
+    const row: Activity = { id: createLocalActivityId(), event: text('event'), title: text('title'), person: text('person'), kind: text('kind') as Kind, amount, date: text('date'), method: text('method'), review: 'Pending', paymentReference: '', approval: 'Pending', repaymentReference: '', reconciliationReference: '', history: [{ at: new Date().toISOString(), message: 'Demo activity created locally.' }] };
     if (save({ ...state, activities: [row, ...state.activities] }, 'Activity added. Attach a document and check each status separately.')) { setAdding(false); form.current?.close(); setSelected(row.id); }
   }
   const rows = state?.activities.filter(r => event === 'all' || r.event === event) ?? [];
