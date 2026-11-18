@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { seed, totals, transition, parseState } from '../src/lib/demo';
+import { seed, totals, transition, parseState } from '../src/app/demo/_lib/state';
 
 test('accepting a screenshot never confirms payment or reconciles it', () => {
  const row = transition(seed().activities[0], 'accept', 'Screenshot is legible');

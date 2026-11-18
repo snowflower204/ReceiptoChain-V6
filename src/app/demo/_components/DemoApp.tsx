@@ -3,17 +3,17 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Activity, Action, DemoState, Evidence, Kind, STORAGE_KEY, kinds, money, parseState, seed, totals, transition } from '@/lib/demo';
+import { Activity, Action, DemoState, Evidence, Kind, STORAGE_KEY, readSavedDemo, kinds, money, parseState, seed, totals, transition } from '../_lib/state';
 import './demo.css';
 
 type View = 'dashboard' | 'events' | 'activities' | 'reviews' | 'reimbursements' | 'reconciliation' | 'about';
 const navigation: { view: View; label: string; href: string; icon: string }[] = [
-  { view: 'dashboard', label: 'Overview', href: '/dashboard', icon: '◫' },
-  { view: 'events', label: 'Events', href: '/events', icon: '▦' },
-  { view: 'activities', label: 'Financial activities', href: '/transactions', icon: '↔' },
-  { view: 'reviews', label: 'Document reviews', href: '/reviews', icon: '▤' },
-  { view: 'reimbursements', label: 'Reimbursements', href: '/reimbursements', icon: '↗' },
-  { view: 'reconciliation', label: 'Reconciliation', href: '/reconciliation', icon: '✓' },
+  { view: 'dashboard', label: 'Overview', href: '/demo', icon: '◫' },
+  { view: 'events', label: 'Events', href: '/demo/events', icon: '▦' },
+  { view: 'activities', label: 'Financial activities', href: '/demo/financial-activities', icon: '↔' },
+  { view: 'reviews', label: 'Document reviews', href: '/demo/document-reviews', icon: '▤' },
+  { view: 'reimbursements', label: 'Reimbursements', href: '/demo/reimbursements', icon: '↗' },
+  { view: 'reconciliation', label: 'Reconciliation', href: '/demo/reconciliation', icon: '✓' },
 ];
 const descriptions: Record<View, string> = {
   dashboard: 'A clear view of your event’s money, documents, and next steps.', events: 'Keep every collection and expense connected to an event.',
@@ -46,7 +46,7 @@ export default function DemoApp({ view = 'dashboard' }: { view?: View }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = readSavedDemo(localStorage);
       const initial = raw ? parseState(raw) : seed();
       rawSaved.current = raw; latest.current = initial; setState(initial);
     } catch { setError('Saved demo data could not be loaded. Reset the demo to start again. Existing data has not been overwritten.'); }
@@ -117,13 +117,13 @@ export default function DemoApp({ view = 'dashboard' }: { view?: View }) {
   return <div className="rc-app">
     <a className="rc-skip" href="#main">Skip to content</a>
     <aside className="rc-sidebar">
-      <Link href="/dashboard" className="rc-brand"><Image src="/logo.png" alt="ReceiptoChain logo" width={52} height={52} priority /><span>ReceiptoChain<small>EVENT FINANCE</small></span></Link>
+      <Link href="/demo" className="rc-brand"><Image src="/logo.png" alt="ReceiptoChain logo" width={52} height={52} priority /><span>ReceiptoChain<small>EVENT FINANCE</small></span></Link>
       <button className="rc-menu" aria-expanded={menu} aria-controls="rc-navigation" onClick={() => setMenu(!menu)}>☰ Menu</button>
-      <nav id="rc-navigation" className={menu ? 'open' : ''} aria-label="Main navigation"><p className="rc-nav-label">YOUR WORKSPACE</p>{navigation.map(n => <Link key={n.view} href={n.href} aria-current={view === n.view ? 'page' : undefined}><span aria-hidden="true">{n.icon}</span>{n.label}{n.view === 'reviews' && stats.pendingReview > 0 && <b>{stats.pendingReview}</b>}</Link>)}<Link href="/about" aria-current={view === 'about' ? 'page' : undefined}><span aria-hidden="true">ⓘ</span>About the demo</Link></nav>
+      <nav id="rc-navigation" className={menu ? 'open' : ''} aria-label="Main navigation"><p className="rc-nav-label">YOUR WORKSPACE</p>{navigation.map(n => <Link key={n.view} href={n.href} aria-current={view === n.view ? 'page' : undefined}><span aria-hidden="true">{n.icon}</span>{n.label}{n.view === 'reviews' && stats.pendingReview > 0 && <b>{stats.pendingReview}</b>}</Link>)}<Link href="/demo/about" aria-current={view === 'about' ? 'page' : undefined}><span aria-hidden="true">ⓘ</span>About the demo</Link></nav>
       <div className="rc-sidebar-bottom"><span className="rc-demo-dot" /> ENTREPRENEURSHIP PROTOTYPE<p>Clear records.<br />Confident next steps.</p><small>By Hannah A. Hontiveros</small></div>
     </aside>
     <div className="rc-workspace">
-      <header className="rc-topbar"><span>Workspace <span className="rc-slash">/</span> <strong>{title}</strong></span><Badge>DEMO · LOCAL ONLY</Badge></header>
+      <header className="rc-topbar"><span>Workspace <span className="rc-slash">/</span> <strong>{title}</strong></span><div className="rc-demo-controls"><Badge>Demo – Local Only</Badge><Link href="/" className="rc-exit" prefetch={false}>Exit Demo ↗</Link></div></header>
       <main id="main" className="rc-main">
         <div className="rc-heading"><div><p className="rc-eyebrow">RECEIPTOCHAIN / EVENT FINANCES</p><h1>{title}</h1><p>{descriptions[view]}</p></div>{view !== 'about' && <button className="rc-primary" disabled={!state} onClick={() => { setAdding(true); setError(''); }}>+ Add activity</button>}</div>
         <div className="rc-demo-banner"><strong>Demo workspace</strong><span>Fictional records. No money is moved. Changes and uploads stay in this browser and are not sent to a server.</span><button onClick={() => setConfirmReset(true)}>Reset demo</button></div>
@@ -137,8 +137,8 @@ export default function DemoApp({ view = 'dashboard' }: { view?: View }) {
             ['Approved, awaiting repayment', money(stats.owed), 'Still owed to volunteers'],
             ['Net cash movement', money(stats.income - stats.outflow), 'Confirmed collections − organization payouts'],
           ].map(([label,value,caption]) => <article className="rc-metric" key={label}><p>{label}</p><strong>{value}</strong><small>{caption}</small></article>)}</section>
-          <div className="rc-overview-grid"><section className="rc-panel rc-next"><div className="rc-section-title"><h2>What needs attention</h2><span className="rc-muted">Keep things moving</span></div><Link href="/reviews"><span><b>Review supporting documents</b><small>Accept, request changes, or reject</small></span><strong>{stats.pendingReview} →</strong></Link><Link href="/reimbursements"><span><b>Review volunteer claims</b><small>{money(stats.claims)} requested, not yet approved</small></span><strong>→</strong></Link><Link href="/reconciliation"><span><b>Match records to your ledger</b><small>Reconciliation is a separate final check</small></span><strong>{stats.unmatched} →</strong></Link></section>
-          <section className="rc-principle"><span className="rc-eyebrow">EVERY STEP HAS A PURPOSE</span><h2>A document tells a story.<br />A payment needs a check.</h2><p>Accepting a screenshot only accepts the document. Confirm receipt of funds separately, then match the transaction to your ledger.</p><Link href="/about">How the demo works →</Link></section></div>
+          <div className="rc-overview-grid"><section className="rc-panel rc-next"><div className="rc-section-title"><h2>What needs attention</h2><span className="rc-muted">Keep things moving</span></div><Link href="/demo/document-reviews"><span><b>Review supporting documents</b><small>Accept, request changes, or reject</small></span><strong>{stats.pendingReview} →</strong></Link><Link href="/demo/reimbursements"><span><b>Review volunteer claims</b><small>{money(stats.claims)} requested, not yet approved</small></span><strong>→</strong></Link><Link href="/demo/reconciliation"><span><b>Match records to your ledger</b><small>Reconciliation is a separate final check</small></span><strong>{stats.unmatched} →</strong></Link></section>
+          <section className="rc-principle"><span className="rc-eyebrow">EVERY STEP HAS A PURPOSE</span><h2>A document tells a story.<br />A payment needs a check.</h2><p>Accepting a screenshot only accepts the document. Confirm receipt of funds separately, then match the transaction to your ledger.</p><Link href="/demo/about">How the demo works →</Link></section></div>
         </>}
         {view === 'events' ? <section className="rc-event-grid">{state.events.filter(n => event === 'all' || n === event).map(n => { const items = state.activities.filter(r => r.event === n); const t = totals(items); return <article className="rc-panel" key={n}><Badge>DEMO EVENT</Badge><h2>{n}</h2><p>{items.length ? `${items.length} financial activities` : 'No financial activities yet'}</p><dl><div><dt>Confirmed collections</dt><dd>{money(t.income)}</dd></div><div><dt>Recorded expenses</dt><dd>{money(t.expenses)}</dd></div><div><dt>Awaiting repayment</dt><dd>{money(t.owed)}</dd></div></dl><button className="rc-secondary" onClick={() => { setEvent(n); setAdding(true); }}>+ Add activity to event</button></article>; })}<button className="rc-add-event" onClick={() => { setNewEvent(true); setError(''); }}>+ Create demo event</button></section> : view === 'about' ? <section className="rc-panel rc-guide"><Image src="/logo.png" alt="Original ReceiptoChain logo" width={100} height={100} /><h2>ReceiptoChain</h2><p>Organize event financial activities, payment evidence, reviews, and reimbursements in one place.</p><h3>Three separate checks</h3><ol><li><strong>Document review:</strong> assess whether the evidence is usable. Acceptance does not prove that money arrived.</li><li><strong>Payment confirmation:</strong> independently check the bank, wallet, or cash record and enter a reference.</li><li><strong>Reconciliation:</strong> match the confirmed movement against the event ledger and enter its reference.</li></ol><h3>Reimbursements without duplicate expenses</h3><p>A volunteer’s flight claim enters recorded expenses once it is approved. Repayment reduces the outstanding amount and increases cash paid out; it does not add a second expense. Accommodation paid directly by the organization is a direct expense, not a volunteer claim.</p><h3>Your demo files stay local</h3><p>PNG, JPEG, and PDF uploads (up to 1 MB each) are stored only in this browser’s local storage. They are not uploaded to Neon or any server, shared with reviewers, or synced across devices. Clearing browser data or resetting the demo removes them. Use sample files, not sensitive documents.</p><p>All roles are simulated by one person. This prototype has no real payment processing, bank verification, access control, or tamper-proof audit trail. The activity history is a local demonstration.</p><h3>Brand assets</h3><p>The original ReceiptoChain logo, favicon, receipt imagery, and green-and-yellow identity are preserved.</p><Image src="/Template.png" alt="Original ReceiptoChain receipt header" width={736} height={75} className="rc-brand-template" /><p className="rc-muted">Founder & developer: Hannah A. Hontiveros</p></section> : <>
           {view === 'reimbursements' && <div className="rc-inline-summary"><b>{money(stats.claims)} requested</b><b>{money(stats.owed)} approved, unpaid</b><span>Repayment settles the claim; the expense is counted once.</span></div>}

@@ -1,86 +1,54 @@
-# ReceiptoChain — entrepreneurship prototype
+# Real application and isolated demo
 
-The `entrep-101` branch demonstrates event financial activities using **fictional data and browser-local persistence**. It retains the original green-and-yellow identity, `public/logo.png`, receipt brand assets, and favicon.
+The original ReceiptoChain website is restored at `/`. Existing real application routes remain available with their original implementation.
 
-## Run locally
+The entrepreneurship prototype is preserved separately at **`/demo`**. Its pages, components, styles, and browser-local state code live in `src/app/demo`. See [the demo guide](src/app/demo/README.md) for setup, scenarios, storage migration, and tests. Demo actions never call the real APIs.
 
-Use Node.js 20.19+ (or a supported newer LTS) and npm.
+No Neon or Prisma changes are included. Vercel automatic Git deployment remains disabled for `entrep-101`; this branch is for review.
 
-```sh
-npm ci --ignore-scripts
-npm run dev
-```
+---
 
-Open `http://localhost:3000`. The demo UI works without database credentials. `--ignore-scripts` avoids the existing Prisma postinstall requirement for this UI-only review. Legacy database screens are not part of the demo; do not use them for this walkthrough.
+# ReceiptoChain
 
-## Demo pages
+ReceiptoChain is a secure, real-time receipt monitoring system built for students and institutions. It ensures transparent and verifiable transactions by integrating QR code verification and blockchain-like receipt chaining.
 
-- `/` and `/dashboard`: automatic totals, next steps, financial activities.
-- `/events`: event totals and local event creation.
-- `/transactions`: add activities, attach evidence, and open all workflow controls.
-- `/reviews`: document review queue.
-- `/reimbursements`: approval and repayment tracking.
-- `/reconciliation`: separate ledger matching.
-- `/about`: explanation, limitations, and original brand assets.
-- `/transaction-history` and `/receipt`: aliases to the local activity workspace on this prototype branch. Legacy receipt generation is not used.
+## 🚀 Features
 
-The old API routes, Prisma schema/migrations, and legacy student/login pages are unchanged. The new demo never calls an API, connects to Neon, moves money, or uploads documents to a server.
+- 🔒 Secure and real-time receipt logging
+- 📄 Receipt chaining with blockchain-like structure
+- 📊 Dynamic student and transaction data display
+- 📷 QR Code verification system
+- 🌐 Admin dashboard with real-time insights
 
-## Walkthrough: three scenarios
+## 🛠️ Tech Stack
 
-All names, references, and sample documents are fictional. `Community Tech Summit` starts with three activities; `Campus Makers Workshop` demonstrates an empty event.
+- **Frontend:** React, Next.js, Tailwind CSS
+- **Backend:** Express.js
+- **Database:** MySQL
+- **Tools:** Vercel (for deployment), Git, Figma (for design)
+- **Security:** Blockchain-style verification
 
-1. **Participant event payment — ₱500.00.** Open Event registration. Enter a review reason, then accept its sample screenshot. Payment must still read **Not confirmed**, and collections stay at ₱0.00. Enter an independent wallet/bank/cash reference and confirm payment separately. Collections become ₱500.00. Enter a ledger reference and reconcile separately.
-2. **Volunteer flight reimbursement — ₱4,800.00.** The sample starts with an accepted airline receipt and independently confirmed volunteer-to-airline payment. Enter a reason and approve reimbursement. The expense is recorded once and ₱4,800.00 is owed; repayment remains **Not repaid**. Enter the organization's transfer reference and record repayment. The amount owed becomes zero; cash outflow increases, but recorded expenses do not increase again. Reconcile using the ledger reference.
-3. **Accommodation paid directly — ₱7,200.00.** The organization paid the hotel directly. The sample starts with an accepted invoice and separately confirmed organization-to-hotel payment. It counts as a direct expense and organization cash outflow. It has no reimbursement approval or repayment workflow. Enter a ledger reference to reconcile.
+## 📁 Project Structure
 
-After confirming the participant payment, approving and repaying the flight, the totals are:
+/ReceiptoChain
 
-| Metric | Amount |
-| --- | ---: |
-| Confirmed collections | ₱500.00 |
-| Recorded expenses | ₱12,000.00 |
-| Approved, awaiting repayment | ₱0.00 |
-| Organization cash outflow | ₱12,000.00 |
-| Net cash movement | −₱11,500.00 |
+├── app/ # Frontend pages and components
 
-Net cash movement excludes opening balances; it is not a bank balance. Direct expenses count when recorded. Volunteer claims count as expenses only when approved; pending and rejected claims are excluded. Full payments only are modeled (no partial payments/refunds).
+├── public/ # Static files
 
-## Independent status rules
+├── styles/ # CSS and Tailwind configurations
 
-- Document acceptance only changes document review. It never confirms payment or reconciles the record.
-- Payment confirmation requires its own reason/reference. It does not approve a reimbursement.
-- Reimbursement approval requires accepted evidence and confirmation that the volunteer paid the supplier.
-- Repayment requires approval, settles the outstanding claim, and cannot be recorded twice.
-- Reconciliation requires accepted evidence and confirmed payment; volunteer claims must also be repaid.
-- Evidence replacement resets review to Pending, preserving the independent payment confirmation. Evidence/review is locked after approval or reconciliation.
-- Every action requires a note/reference and adds a local history entry. No real authorization or banking verification is performed.
+├── .next/ # Build artifacts (should be .gitignored)
 
-## Local storage and files
+├── pages/api/ # API routes for events, transactions, etc.
 
-Records and PNG/JPEG/PDF evidence (maximum 1 MB per file) are saved in `localStorage`, key `receiptochain-entrep-demo-v1`. Uploads stay in this browser, are not synced, and are removed by resetting the demo or clearing browser data. Use sample files only. Browser storage limits can still reject a save; the UI reports the error and keeps the previous saved state. Conflicting edits from another tab require a reload. Invalid saved data is not silently overwritten; explicit reset restores the samples.
+├── lib/ # Database utilities
 
-## Checks
+└── README.md
 
-```sh
-node --import tsx --test tests/demo.test.ts
-```
 
-For a full type check/build, the unchanged API routes require generated Prisma code and a database URL at module initialization. Use a **dummy localhost URL**, not Neon. Generation does not migrate, seed, or query a database:
+## ⚙️ Getting Started
 
-```sh
-DATABASE_URL_UNPOOLED=postgresql://demo:demo@127.0.0.1:1/demo npx prisma generate
-npx tsc --noEmit
-npm rebuild bcrypt
-DATABASE_URL=postgresql://demo:demo@127.0.0.1:1/demo npm run build
-```
-
-The tests cover independent document/payment/reconciliation transitions, reimbursement prerequisites, repayment without double counting, aggregate totals, duplicate actions, evidence locks, and invalid saved data.
-
-## Verification in this workspace
-
-Eight workflow tests, TypeScript, and the production build passed using the dummy localhost URL above. The managed browser preview could not start because its launcher injects Vite-style `--host` and `--strictPort` flags into `next dev`. Rendered desktop/mobile behavior and file-picker interactions still need a local browser walkthrough in VS Code.
-
-## No deployment
-
-`vercel.json` disables automatic Git deployments specifically for `entrep-101`. No merge or deployment is part of this prototype review. Database code and Neon configuration are unchanged.
+### Prerequisites
+- Node.js and npm
+- MySQL server

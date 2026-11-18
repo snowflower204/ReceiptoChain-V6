@@ -9,7 +9,7 @@ export interface Activity {
   history: { at: string; message: string }[];
 }
 export interface DemoState { version: 1; events: string[]; activities: Activity[] }
-export const STORAGE_KEY = 'receiptochain-entrep-demo-v1';
+export const STORAGE_KEY = 'receiptochain-demo-v1';
 export const kinds: Record<Kind, string> = { participant: 'Participant payment', reimbursement: 'Volunteer reimbursement', direct: 'Organization expense' };
 export const money = (cents: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(cents / 100);
 export function seed(): DemoState {
@@ -75,4 +75,17 @@ export function parseState(raw: string): DemoState {
     ids.add(r.id);
   }
   return state;
+}
+
+// Read only our previous prototype key; never touch application/auth storage.
+export function readSavedDemo(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>): string | null {
+  const saved = storage.getItem(STORAGE_KEY);
+  if (saved !== null) return saved;
+  const legacyKey = 'receiptochain-entrep-demo-v1';
+  const legacy = storage.getItem(legacyKey);
+  if (legacy === null) return null;
+  parseState(legacy); // Invalid data stays untouched for explicit recovery.
+  storage.setItem(STORAGE_KEY, legacy); // Only remove the old copy after a successful save.
+  storage.removeItem(legacyKey);
+  return legacy;
 }

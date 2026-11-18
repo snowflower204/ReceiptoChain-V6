@@ -164,3 +164,6 @@
   .rc-history li { flex-direction:column; gap:4px; } .rc-inline-summary { gap:10px; }
 }
 @media(prefers-reduced-motion:reduce) { .rc-app * { transition:none!important; scroll-behavior:auto!important; } }
+
+.rc-demo-controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:12px; }
+.rc-exit { font-weight:700; color:var(--deep)!important; text-decoration:underline!important; white-space:nowrap; }
