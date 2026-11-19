@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
+import { createSession, SESSION_COOKIE } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
+    const session = await createSession(user.id);
+    const response = NextResponse.json(
       {
         message: "Login successful",
         user: {
@@ -58,6 +60,16 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
+
+    response.cookies.set(SESSION_COOKIE, session.token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: session.expiresAt,
+    });
+
+    return response;
   } catch (error: unknown) {
     console.error("Login error:", error);
 

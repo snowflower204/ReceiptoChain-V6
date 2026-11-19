@@ -30,8 +30,7 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        // Success — redirect to dashboard
-        router.push('/dashboard');
+        router.push('/app/activities');
       } else {
         // Error — show error message
         alert(data.message || 'Login failed. Please try again.');

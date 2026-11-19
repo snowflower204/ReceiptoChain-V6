@@ -7,5 +7,6 @@ import Footer from '@/app/footer';
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const demo = path === '/demo' || path.startsWith('/demo/');
-  return demo ? <>{children}</> : <><Navbar /><main className="pt-20 min-h-screen">{children}</main><Footer /></>;
+  const workspace = path === '/app' || path.startsWith('/app/');
+  return demo || workspace ? <>{children}</> : <><Navbar /><main className="pt-20 min-h-screen">{children}</main><Footer /></>;
 }
