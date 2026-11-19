@@ -411,7 +411,7 @@ model LiquidationItem {
   id           Int      @id @default(autoincrement())
   businessId   Int      @map("business_id")
   reportId     Int      @map("report_id")
-  activityId   Int      @map("activity_id")
+  activityId   Int      @unique @map("activity_id")
   includedById Int      @map("included_by_id")
   includedAt   DateTime @default(now()) @map("included_at")
   notes        String?
@@ -421,8 +421,8 @@ model LiquidationItem {
   activity   FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
   includedBy User              @relation("LiquidationItemIncluder", fields: [includedById], references: [id], onDelete: Restrict)
 
-  @@unique([reportId, activityId])
-  @@index([businessId, activityId])
+  @@index([reportId])
+  @@index([businessId, includedAt])
   @@map("liquidation_items")
 }
 
