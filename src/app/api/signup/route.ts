@@ -42,6 +42,17 @@ function getErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
+function isStrongPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    password.length <= 72 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9\s]/.test(password)
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody: unknown = await request.json();
@@ -66,7 +77,9 @@ export async function POST(request: NextRequest) {
     const email = readString(body.email).toLowerCase();
 
     const password =
-      typeof body.password === "string" ? body.password : "";
+      typeof body.password === "string"
+        ? body.password
+        : "";
 
     const allowedAccountTypes: SignupType[] = [
       "CUSTOMER",
@@ -92,11 +105,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 12 || password.length > 72) {
+    if (!isStrongPassword(password)) {
       return NextResponse.json(
         {
           message:
-            "Password must contain between 12 and 72 characters",
+            "Password must have 8 to 72 characters, including uppercase, lowercase, number, and special character.",
         },
         { status: 400 }
       );
@@ -109,14 +122,18 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       return NextResponse.json(
-        { message: "An account with this email already exists" },
+        {
+          message:
+            "An account with this email already exists",
+        },
         { status: 409 }
       );
     }
 
+    // The 12 below is the bcrypt security cost.
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Public customer registration
+    // Customer registration
     if (accountType === "CUSTOMER") {
       const user = await prisma.user.create({
         data: {
@@ -133,25 +150,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: true,
-          message: "Customer account created successfully",
+          message:
+            "Customer account created successfully",
           account: user,
         },
         { status: 201 }
       );
     }
 
-    // Public new-business registration
+    // Business-owner registration
     if (accountType === "BUSINESS_OWNER") {
       const businessName = readString(body.businessName);
       const legalName = readString(body.legalName);
+
       const countryCode =
         readString(body.countryCode).toUpperCase() || "PH";
+
       const defaultCurrency =
-        readString(body.defaultCurrency).toUpperCase() || "PHP";
+        readString(body.defaultCurrency).toUpperCase() ||
+        "PHP";
+
       const timezone =
         readString(body.timezone) || "Asia/Manila";
 
-      if (businessName.length < 2 || businessName.length > 120) {
+      if (
+        businessName.length < 2 ||
+        businessName.length > 120
+      ) {
         return NextResponse.json(
           { message: "Enter a valid business name" },
           { status: 400 }
@@ -160,66 +185,78 @@ export async function POST(request: NextRequest) {
 
       if (!/^[A-Z]{2}$/.test(countryCode)) {
         return NextResponse.json(
-          { message: "Country code must contain two letters" },
+          {
+            message:
+              "Country code must contain two letters",
+          },
           { status: 400 }
         );
       }
 
       if (!/^[A-Z]{3}$/.test(defaultCurrency)) {
         return NextResponse.json(
-          { message: "Currency code must contain three letters" },
+          {
+            message:
+              "Currency code must contain three letters",
+          },
           { status: 400 }
         );
       }
 
-      const result = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            email,
-            passwordHash,
-          },
-          select: {
-            id: true,
-            email: true,
-            platformRole: true,
-          },
-        });
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              email,
+              passwordHash,
+            },
+            select: {
+              id: true,
+              email: true,
+              platformRole: true,
+            },
+          });
 
-        const business = await tx.business.create({
-          data: {
-            name: businessName,
-            slug: createBusinessSlug(businessName),
-            legalName: legalName || null,
-            countryCode,
-            defaultCurrency,
-            timezone,
-            memberships: {
-              create: {
-                role: "OWNER",
-                user: {
-                  connect: {
-                    id: user.id,
+          const business = await tx.business.create({
+            data: {
+              name: businessName,
+              slug: createBusinessSlug(businessName),
+              legalName: legalName || null,
+              countryCode,
+              defaultCurrency,
+              timezone,
+              memberships: {
+                create: {
+                  role: "OWNER",
+                  user: {
+                    connect: {
+                      id: user.id,
+                    },
                   },
                 },
               },
             },
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            countryCode: true,
-            defaultCurrency: true,
-          },
-        });
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              countryCode: true,
+              defaultCurrency: true,
+            },
+          });
 
-        return { user, business };
-      });
+          return {
+            user,
+            business,
+          };
+        }
+      );
 
       return NextResponse.json(
         {
           success: true,
-          message: "Business account created successfully",
+          message:
+            "Business account created successfully",
           account: result.user,
           business: result.business,
         },
@@ -227,12 +264,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Registration through an existing business invitation
-    const invitationCode = readString(body.invitationCode);
+    // Business-member registration
+    const invitationCode = readString(
+      body.invitationCode
+    );
 
     if (!invitationCode) {
       return NextResponse.json(
-        { message: "A business invitation code is required" },
+        {
+          message:
+            "A business invitation code is required",
+        },
         { status: 400 }
       );
     }
@@ -242,7 +284,9 @@ export async function POST(request: NextRequest) {
 
     const invitation =
       await prisma.businessInvitation.findUnique({
-        where: { codeHash },
+        where: {
+          codeHash,
+        },
         include: {
           business: {
             select: {
@@ -263,70 +307,80 @@ export async function POST(request: NextRequest) {
       invitation.role === "OWNER"
     ) {
       return NextResponse.json(
-        { message: "Invalid or expired invitation code" },
+        {
+          message:
+            "Invalid or expired invitation code",
+        },
         { status: 400 }
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-        },
-        select: {
-          id: true,
-          email: true,
-          platformRole: true,
-        },
-      });
-
-      const claimedInvitation =
-        await tx.businessInvitation.updateMany({
-          where: {
-            id: invitation.id,
-            active: true,
-            usedCount: {
-              lt: invitation.maxUses,
-            },
-            OR: [
-              { expiresAt: null },
-              {
-                expiresAt: {
-                  gt: now,
-                },
-              },
-            ],
-          },
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
           data: {
-            usedCount: {
-              increment: 1,
-            },
-            active:
-              invitation.usedCount + 1 <
-              invitation.maxUses,
+            email,
+            passwordHash,
+          },
+          select: {
+            id: true,
+            email: true,
+            platformRole: true,
           },
         });
 
-      if (claimedInvitation.count !== 1) {
-        throw new Error("INVITATION_UNAVAILABLE");
+        const claimedInvitation =
+          await tx.businessInvitation.updateMany({
+            where: {
+              id: invitation.id,
+              active: true,
+              usedCount: {
+                lt: invitation.maxUses,
+              },
+              OR: [
+                {
+                  expiresAt: null,
+                },
+                {
+                  expiresAt: {
+                    gt: now,
+                  },
+                },
+              ],
+            },
+            data: {
+              usedCount: {
+                increment: 1,
+              },
+              active:
+                invitation.usedCount + 1 <
+                invitation.maxUses,
+            },
+          });
+
+        if (claimedInvitation.count !== 1) {
+          throw new Error(
+            "INVITATION_UNAVAILABLE"
+          );
+        }
+
+        await tx.businessMember.create({
+          data: {
+            userId: user.id,
+            businessId: invitation.businessId,
+            role: invitation.role,
+          },
+        });
+
+        return user;
       }
-
-      await tx.businessMember.create({
-        data: {
-          userId: user.id,
-          businessId: invitation.businessId,
-          role: invitation.role,
-        },
-      });
-
-      return user;
-    });
+    );
 
     return NextResponse.json(
       {
         success: true,
-        message: "Business member account created successfully",
+        message:
+          "Business member account created successfully",
         account: result,
         business: invitation.business,
       },
@@ -340,7 +394,10 @@ export async function POST(request: NextRequest) {
       error.message === "INVITATION_UNAVAILABLE"
     ) {
       return NextResponse.json(
-        { message: "This invitation is no longer available" },
+        {
+          message:
+            "This invitation is no longer available",
+        },
         { status: 409 }
       );
     }
@@ -356,7 +413,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: "Failed to create account" },
+      {
+        message: "Failed to create account",
+      },
       { status: 500 }
     );
   }

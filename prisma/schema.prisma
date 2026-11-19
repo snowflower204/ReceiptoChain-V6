@@ -15,11 +15,42 @@ model User {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  memberships BusinessMember[]
+  memberships                 BusinessMember[]
+  sessions                    AuthSession[]
+  createdEvents               BusinessEvent[]        @relation("EventCreator")
+  createdActivities           FinancialActivity[]    @relation("ActivityCreator")
+  confirmedActivities         FinancialActivity[]    @relation("ActivityConfirmer")
+  reconciledActivities        FinancialActivity[]    @relation("ActivityReconciler")
+  reviewedDocuments           EvidenceDocument[]     @relation("DocumentReviewer")
+  paymentConfirmations        PaymentConfirmation[]  @relation("PaymentConfirmer")
+  requestedReimbursements     ReimbursementRequest[] @relation("ReimbursementRequester")
+  reviewedReimbursements      ReimbursementRequest[] @relation("ReimbursementReviewer")
+  issuedReceipts              Receipt[]              @relation("ReceiptIssuer")
+  auditEntries                AuditEntry[]           @relation("AuditActor")
+  createdLiquidationReports   LiquidationReport[]    @relation("LiquidationReportCreator")
+  finalizedLiquidationReports LiquidationReport[]    @relation("LiquidationReportFinalizer")
+  includedLiquidationItems    LiquidationItem[]      @relation("LiquidationItemIncluder")
 
   @@map("users")
 }
 
+model AuthSession {
+  id        String    @id @default(uuid())
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+// Legacy student-system models are retained during the MVP migration.
 model Student {
   id           Int           @id @default(autoincrement())
   idNumber     String        @unique @map("id_number")
@@ -35,6 +66,7 @@ model Student {
   @@map("students")
 }
 
+// Legacy event model. New product work uses BusinessEvent.
 model Event {
   id                Int                @id @default(autoincrement())
   title             String
@@ -49,6 +81,7 @@ model Event {
   @@map("events")
 }
 
+// Legacy transaction model. New product work uses FinancialActivity.
 model Transaction {
   id                Int                @id @default(autoincrement())
   studentId         Int                @map("student_id")
@@ -92,8 +125,18 @@ model Business {
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  memberships BusinessMember[]
-  invitations BusinessInvitation[]
+  memberships          BusinessMember[]
+  invitations          BusinessInvitation[]
+  events               BusinessEvent[]
+  budgetItems          EventBudgetItem[]
+  financialActivities  FinancialActivity[]
+  documents            EvidenceDocument[]
+  paymentConfirmations PaymentConfirmation[]
+  reimbursements       ReimbursementRequest[]
+  receipts             Receipt[]
+  auditEntries         AuditEntry[]
+  liquidationReports   LiquidationReport[]
+  liquidationItems     LiquidationItem[]
 
   @@index([status])
   @@index([countryCode])
@@ -108,7 +151,7 @@ model BusinessMember {
   updatedAt  DateTime           @updatedAt @map("updated_at")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
   @@id([userId, businessId])
   @@index([businessId])
@@ -126,11 +169,282 @@ model BusinessInvitation {
   active     Boolean            @default(true)
   createdAt  DateTime           @default(now()) @map("created_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
   @@index([businessId])
   @@index([active])
   @@map("business_invitations")
+}
+
+model BusinessEvent {
+  id          Int         @id @default(autoincrement())
+  businessId  Int         @map("business_id")
+  createdById Int         @map("created_by_id")
+  name        String
+  slug        String
+  description String?
+  venue       String?
+  startsAt    DateTime    @map("starts_at")
+  endsAt      DateTime?   @map("ends_at")
+  status      EventStatus @default(DRAFT)
+  currency    String      @default("PHP") @db.VarChar(3)
+  budgetTotal Decimal     @default(0) @map("budget_total") @db.Decimal(14, 2)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  business           Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  createdBy          User                   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  budgetItems        EventBudgetItem[]
+  activities         FinancialActivity[]
+  reimbursements     ReimbursementRequest[]
+  receipts           Receipt[]
+  liquidationReports LiquidationReport[]
+
+  @@unique([businessId, slug])
+  @@index([businessId, status])
+  @@index([businessId, startsAt])
+  @@map("business_events")
+}
+
+model EventBudgetItem {
+  id            Int      @id @default(autoincrement())
+  businessId    Int      @map("business_id")
+  eventId       Int      @map("event_id")
+  name          String
+  category      String?
+  plannedAmount Decimal  @map("planned_amount") @db.Decimal(14, 2)
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event      BusinessEvent       @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  activities FinancialActivity[]
+
+  @@index([businessId, eventId])
+  @@map("event_budget_items")
+}
+
+model FinancialActivity {
+  id             Int                     @id @default(autoincrement())
+  businessId     Int                     @map("business_id")
+  eventId        Int                     @map("event_id")
+  budgetItemId   Int?                    @map("budget_item_id")
+  createdById    Int                     @map("created_by_id")
+  confirmedById  Int?                    @map("confirmed_by_id")
+  reconciledById Int?                    @map("reconciled_by_id")
+  type           FinancialActivityType
+  status         FinancialActivityStatus @default(DRAFT)
+  title          String
+  description    String?
+  amount         Decimal                 @db.Decimal(14, 2)
+  currency       String                  @default("PHP") @db.VarChar(3)
+  occurredAt     DateTime                @map("occurred_at")
+  paymentMethod  String?                 @map("payment_method")
+  externalRef    String?                 @map("external_ref")
+  counterparty   String?
+  confirmedAt    DateTime?               @map("confirmed_at")
+  reconciledAt   DateTime?               @map("reconciled_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  business                Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event                   BusinessEvent         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  budgetItem              EventBudgetItem?      @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
+  createdBy               User                  @relation("ActivityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedBy             User?                 @relation("ActivityConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  reconciledBy            User?                 @relation("ActivityReconciler", fields: [reconciledById], references: [id], onDelete: SetNull)
+  documents               EvidenceDocument[]
+  paymentConfirmations    PaymentConfirmation[]
+  receipt                 Receipt?
+  reimbursementSettlement ReimbursementRequest? @relation("ReimbursementSettlement")
+  liquidationItems        LiquidationItem[]
+
+  @@index([businessId, eventId])
+  @@index([businessId, status])
+  @@index([businessId, occurredAt])
+  @@index([budgetItemId])
+  @@map("financial_activities")
+}
+
+/// Evidence attachment and tenant ownership invariants are enforced by the
+/// harden_mvp_finance_integrity SQL migration.
+model EvidenceDocument {
+  id              Int            @id @default(autoincrement())
+  businessId      Int            @map("business_id")
+  activityId      Int?           @map("activity_id")
+  reimbursementId Int?           @map("reimbursement_id")
+  reviewedById    Int?           @map("reviewed_by_id")
+  kind            DocumentKind
+  status          DocumentStatus @default(PENDING)
+  fileName        String         @map("file_name")
+  storageKey      String         @map("storage_key")
+  mimeType        String         @map("mime_type")
+  sizeBytes       Int            @map("size_bytes")
+  sha256          String
+  reviewNotes     String?        @map("review_notes")
+  reviewedAt      DateTime?      @map("reviewed_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  business      Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  activity      FinancialActivity?    @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  reimbursement ReimbursementRequest? @relation(fields: [reimbursementId], references: [id], onDelete: Restrict)
+  reviewedBy    User?                 @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId, status])
+  @@index([activityId])
+  @@index([reimbursementId])
+  @@index([sha256])
+  @@map("evidence_documents")
+}
+
+model PaymentConfirmation {
+  id            Int      @id @default(autoincrement())
+  businessId    Int      @map("business_id")
+  activityId    Int      @map("activity_id")
+  confirmedById Int      @map("confirmed_by_id")
+  method        String
+  provider      String?
+  reference     String
+  amount        Decimal  @db.Decimal(14, 2)
+  confirmedAt   DateTime @default(now()) @map("confirmed_at")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  activity    FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  confirmedBy User              @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, provider, reference])
+  @@index([businessId, activityId])
+  @@map("payment_confirmations")
+}
+
+model ReimbursementRequest {
+  id                   Int                 @id @default(autoincrement())
+  businessId           Int                 @map("business_id")
+  eventId              Int                 @map("event_id")
+  requesterId          Int                 @map("requester_id")
+  reviewedById         Int?                @map("reviewed_by_id")
+  settlementActivityId Int?                @unique @map("settlement_activity_id")
+  status               ReimbursementStatus @default(DRAFT)
+  title                String
+  description          String?
+  amount               Decimal             @db.Decimal(14, 2)
+  submittedAt          DateTime?           @map("submitted_at")
+  reviewedAt           DateTime?           @map("reviewed_at")
+  paidAt               DateTime?           @map("paid_at")
+  reviewNotes          String?             @map("review_notes")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  business           Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event              BusinessEvent      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  requester          User               @relation("ReimbursementRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  reviewedBy         User?              @relation("ReimbursementReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  settlementActivity FinancialActivity? @relation("ReimbursementSettlement", fields: [settlementActivityId], references: [id], onDelete: SetNull)
+  documents          EvidenceDocument[]
+
+  @@index([businessId, eventId])
+  @@index([businessId, status])
+  @@index([requesterId])
+  @@map("reimbursement_requests")
+}
+
+model Receipt {
+  id               Int       @id @default(autoincrement())
+  businessId       Int       @map("business_id")
+  eventId          Int       @map("event_id")
+  activityId       Int       @unique @map("activity_id")
+  issuedById       Int       @map("issued_by_id")
+  receiptNumber    String    @map("receipt_number")
+  publicToken      String    @unique @default(uuid()) @map("public_token")
+  verificationHash String    @unique @map("verification_hash")
+  recipientName    String?   @map("recipient_name")
+  recipientEmail   String?   @map("recipient_email")
+  issuedAt         DateTime  @default(now()) @map("issued_at")
+  voidedAt         DateTime? @map("voided_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event    BusinessEvent     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  activity FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  issuedBy User              @relation("ReceiptIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, receiptNumber])
+  @@index([businessId, eventId])
+  @@map("receipts")
+}
+
+/// A finalized report records which reconciled activities were included in liquidation.
+model LiquidationReport {
+  id            Int                     @id @default(autoincrement())
+  businessId    Int                     @map("business_id")
+  eventId       Int                     @map("event_id")
+  createdById   Int                     @map("created_by_id")
+  finalizedById Int?                    @map("finalized_by_id")
+  reportNumber  String                  @map("report_number")
+  status        LiquidationReportStatus @default(DRAFT)
+  periodStart   DateTime                @map("period_start")
+  periodEnd     DateTime                @map("period_end")
+  finalizedAt   DateTime?               @map("finalized_at")
+  notes         String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event       BusinessEvent     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("LiquidationReportCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  finalizedBy User?             @relation("LiquidationReportFinalizer", fields: [finalizedById], references: [id], onDelete: SetNull)
+  items       LiquidationItem[]
+
+  @@unique([businessId, reportNumber])
+  @@index([businessId, eventId])
+  @@index([businessId, status])
+  @@map("liquidation_reports")
+}
+
+/// Each row is the separate, auditable "included in liquidation" state.
+model LiquidationItem {
+  id           Int      @id @default(autoincrement())
+  businessId   Int      @map("business_id")
+  reportId     Int      @map("report_id")
+  activityId   Int      @unique @map("activity_id")
+  includedById Int      @map("included_by_id")
+  includedAt   DateTime @default(now()) @map("included_at")
+  notes        String?
+
+  business   Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  report     LiquidationReport @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  activity   FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  includedBy User              @relation("LiquidationItemIncluder", fields: [includedById], references: [id], onDelete: Restrict)
+
+  @@index([reportId])
+  @@index([businessId, includedAt])
+  @@map("liquidation_items")
+}
+
+/// Audit entries are append-only; mutation is blocked by a database trigger.
+model AuditEntry {
+  id           BigInt   @id @default(autoincrement())
+  businessId   Int      @map("business_id")
+  actorId      Int?     @map("actor_id")
+  action       String
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  summary      String?
+  metadata     Json?
+  previousHash String?  @map("previous_hash")
+  entryHash    String   @unique @map("entry_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([businessId, entityType, entityId])
+  @@map("audit_entries")
 }
 
 enum PlatformRole {
@@ -148,4 +462,62 @@ enum BusinessStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+enum LiquidationReportStatus {
+  DRAFT
+  FINALIZED
+  VOIDED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum FinancialActivityType {
+  INCOME
+  EXPENSE
+  REFUND
+  REIMBURSEMENT
+  ADJUSTMENT
+}
+
+enum FinancialActivityStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CONFIRMED
+  RECONCILED
+  VOIDED
+}
+
+enum DocumentKind {
+  PAYMENT_EVIDENCE
+  INVOICE
+  OFFICIAL_RECEIPT
+  SALES_INVOICE
+  EXPENSE_RECEIPT
+  REIMBURSEMENT_EVIDENCE
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ReimbursementStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
 }
