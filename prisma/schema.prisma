@@ -15,16 +15,16 @@ model User {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  memberships             BusinessMember[]
-  sessions                AuthSession[]
-  createdEvents           BusinessEvent[]        @relation("EventCreator")
-  createdActivities       FinancialActivity[]    @relation("ActivityCreator")
-  confirmedActivities     FinancialActivity[]    @relation("ActivityConfirmer")
-  reconciledActivities    FinancialActivity[]    @relation("ActivityReconciler")
-  reviewedDocuments       EvidenceDocument[]     @relation("DocumentReviewer")
-  paymentConfirmations    PaymentConfirmation[]  @relation("PaymentConfirmer")
-  requestedReimbursements ReimbursementRequest[] @relation("ReimbursementRequester")
-  reviewedReimbursements  ReimbursementRequest[] @relation("ReimbursementReviewer")
+  memberships                 BusinessMember[]
+  sessions                    AuthSession[]
+  createdEvents               BusinessEvent[]        @relation("EventCreator")
+  createdActivities           FinancialActivity[]    @relation("ActivityCreator")
+  confirmedActivities         FinancialActivity[]    @relation("ActivityConfirmer")
+  reconciledActivities        FinancialActivity[]    @relation("ActivityReconciler")
+  reviewedDocuments           EvidenceDocument[]     @relation("DocumentReviewer")
+  paymentConfirmations        PaymentConfirmation[]  @relation("PaymentConfirmer")
+  requestedReimbursements     ReimbursementRequest[] @relation("ReimbursementRequester")
+  reviewedReimbursements      ReimbursementRequest[] @relation("ReimbursementReviewer")
   issuedReceipts              Receipt[]              @relation("ReceiptIssuer")
   auditEntries                AuditEntry[]           @relation("AuditActor")
   createdLiquidationReports   LiquidationReport[]    @relation("LiquidationReportCreator")
@@ -192,11 +192,11 @@ model BusinessEvent {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  business       Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  createdBy      User                   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  budgetItems    EventBudgetItem[]
-  activities     FinancialActivity[]
-  reimbursements    ReimbursementRequest[]
+  business           Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  createdBy          User                   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  budgetItems        EventBudgetItem[]
+  activities         FinancialActivity[]
+  reimbursements     ReimbursementRequest[]
   receipts           Receipt[]
   liquidationReports LiquidationReport[]
 
@@ -376,7 +376,6 @@ model Receipt {
   @@index([businessId, eventId])
   @@map("receipts")
 }
-
 
 /// A finalized report records which reconciled activities were included in liquidation.
 model LiquidationReport {
