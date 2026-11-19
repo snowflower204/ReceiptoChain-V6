@@ -25,8 +25,11 @@ model User {
   paymentConfirmations    PaymentConfirmation[]  @relation("PaymentConfirmer")
   requestedReimbursements ReimbursementRequest[] @relation("ReimbursementRequester")
   reviewedReimbursements  ReimbursementRequest[] @relation("ReimbursementReviewer")
-  issuedReceipts          Receipt[]              @relation("ReceiptIssuer")
-  auditEntries            AuditEntry[]           @relation("AuditActor")
+  issuedReceipts              Receipt[]              @relation("ReceiptIssuer")
+  auditEntries                AuditEntry[]           @relation("AuditActor")
+  createdLiquidationReports   LiquidationReport[]    @relation("LiquidationReportCreator")
+  finalizedLiquidationReports LiquidationReport[]    @relation("LiquidationReportFinalizer")
+  includedLiquidationItems    LiquidationItem[]      @relation("LiquidationItemIncluder")
 
   @@map("users")
 }
@@ -132,6 +135,8 @@ model Business {
   reimbursements       ReimbursementRequest[]
   receipts             Receipt[]
   auditEntries         AuditEntry[]
+  liquidationReports   LiquidationReport[]
+  liquidationItems     LiquidationItem[]
 
   @@index([status])
   @@index([countryCode])
@@ -164,7 +169,7 @@ model BusinessInvitation {
   active     Boolean            @default(true)
   createdAt  DateTime           @default(now()) @map("created_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 
   @@index([businessId])
   @@index([active])
@@ -191,8 +196,9 @@ model BusinessEvent {
   createdBy      User                   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
   budgetItems    EventBudgetItem[]
   activities     FinancialActivity[]
-  reimbursements ReimbursementRequest[]
-  receipts       Receipt[]
+  reimbursements    ReimbursementRequest[]
+  receipts           Receipt[]
+  liquidationReports LiquidationReport[]
 
   @@unique([businessId, slug])
   @@index([businessId, status])
@@ -252,6 +258,7 @@ model FinancialActivity {
   paymentConfirmations    PaymentConfirmation[]
   receipt                 Receipt?
   reimbursementSettlement ReimbursementRequest? @relation("ReimbursementSettlement")
+  liquidationItems        LiquidationItem[]
 
   @@index([businessId, eventId])
   @@index([businessId, status])
@@ -260,6 +267,8 @@ model FinancialActivity {
   @@map("financial_activities")
 }
 
+/// Evidence attachment and tenant ownership invariants are enforced by the
+/// harden_mvp_finance_integrity SQL migration.
 model EvidenceDocument {
   id              Int            @id @default(autoincrement())
   businessId      Int            @map("business_id")
@@ -368,6 +377,56 @@ model Receipt {
   @@map("receipts")
 }
 
+
+/// A finalized report records which reconciled activities were included in liquidation.
+model LiquidationReport {
+  id            Int                     @id @default(autoincrement())
+  businessId    Int                     @map("business_id")
+  eventId       Int                     @map("event_id")
+  createdById   Int                     @map("created_by_id")
+  finalizedById Int?                    @map("finalized_by_id")
+  reportNumber  String                  @map("report_number")
+  status        LiquidationReportStatus @default(DRAFT)
+  periodStart   DateTime                @map("period_start")
+  periodEnd     DateTime                @map("period_end")
+  finalizedAt   DateTime?               @map("finalized_at")
+  notes         String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  event       BusinessEvent     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("LiquidationReportCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  finalizedBy User?             @relation("LiquidationReportFinalizer", fields: [finalizedById], references: [id], onDelete: SetNull)
+  items       LiquidationItem[]
+
+  @@unique([businessId, reportNumber])
+  @@index([businessId, eventId])
+  @@index([businessId, status])
+  @@map("liquidation_reports")
+}
+
+/// Each row is the separate, auditable "included in liquidation" state.
+model LiquidationItem {
+  id           Int      @id @default(autoincrement())
+  businessId   Int      @map("business_id")
+  reportId     Int      @map("report_id")
+  activityId   Int      @map("activity_id")
+  includedById Int      @map("included_by_id")
+  includedAt   DateTime @default(now()) @map("included_at")
+  notes        String?
+
+  business   Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  report     LiquidationReport @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  activity   FinancialActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  includedBy User              @relation("LiquidationItemIncluder", fields: [includedById], references: [id], onDelete: Restrict)
+
+  @@unique([reportId, activityId])
+  @@index([businessId, activityId])
+  @@map("liquidation_items")
+}
+
+/// Audit entries are append-only; mutation is blocked by a database trigger.
 model AuditEntry {
   id           BigInt   @id @default(autoincrement())
   businessId   Int      @map("business_id")
@@ -404,6 +463,12 @@ enum BusinessStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+enum LiquidationReportStatus {
+  DRAFT
+  FINALIZED
+  VOIDED
 }
 
 enum EventStatus {
