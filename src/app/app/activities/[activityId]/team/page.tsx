@@ -1,0 +1,22 @@
+import { notFound, redirect } from "next/navigation";
+import { getCurrentSession } from "@/lib/auth";
+import { getEventAccess } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
+import TeamManager from "../_components/TeamManager";
+
+export default async function ActivityTeamPage({ params }: { params: Promise<{ activityId: string }> }) {
+  const session = await getCurrentSession();
+  if (!session) redirect("/login");
+  const activityId = Number((await params).activityId);
+  const access = await getEventAccess(session.userId, activityId);
+  if (!access?.isAdmin) notFound();
+
+  const memberships = await prisma.businessMember.findMany({
+    where: { businessId: access.event.businessId },
+    include: { user: { select: { email: true, eventAssignments: { where: { eventId: activityId }, select: { role: true } } } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const members = memberships.map((membership) => ({ userId: membership.userId, email: membership.user.email, businessRole: membership.role, eventRole: membership.user.eventAssignments[0]?.role ?? null }));
+
+  return <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold">Activity team</h2><p className="mt-1 text-sm text-slate-600">Assign only the people who should see and work on this activity.</p><div className="mt-6"><TeamManager activityId={activityId} members={members} /></div></section>;
+}

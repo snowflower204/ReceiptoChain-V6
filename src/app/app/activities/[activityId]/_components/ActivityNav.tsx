@@ -5,19 +5,22 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { suffix: "", label: "Overview" },
+  { suffix: "/budget", label: "Budget" },
   { suffix: "/money", label: "Money activities" },
   { suffix: "/payments", label: "Payments & receipts" },
   { suffix: "/reconciliation", label: "Reconciliation" },
   { suffix: "/liquidation", label: "Liquidation report" },
 ];
 
-export default function ActivityNav({ activityId }: { activityId: number }) {
+export default function ActivityNav({ activityId, canManageTeam }: { activityId: number; canManageTeam: boolean }) {
   const pathname = usePathname();
   const base = `/app/activities/${activityId}`;
 
+  const visibleItems = canManageTeam ? [...items, { suffix: "/team", label: "Team" }] : items;
+
   return (
     <nav aria-label="Activity sections" className="mt-6 flex gap-2 overflow-x-auto pb-2">
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const href = `${base}${item.suffix}`;
         const active = pathname === href;
         return (

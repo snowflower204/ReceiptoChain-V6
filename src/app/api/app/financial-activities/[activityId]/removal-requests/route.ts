@@ -4,6 +4,13 @@ import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
+function getErrorCode(error: unknown): string | undefined {
+  if (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") {
+    return error.code;
+  }
+  return undefined;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ activityId: string }> }
@@ -19,9 +26,9 @@ export async function POST(
   if (!activity) return NextResponse.json({ message: "Money record not found." }, { status: 404 });
 
   const access = await getEventAccess(session.userId, activity.eventId);
-  const canRequest = access?.isAdmin || access?.eventRole === "FINANCE_REVIEWER";
+  const canRequest = access?.eventRole === "FINANCE_REVIEWER";
   if (!access || !canRequest) {
-    return NextResponse.json({ message: "Only the finance team or an administrator can request removal." }, { status: 403 });
+    return NextResponse.json({ message: "Only an assigned finance reviewer can request removal." }, { status: 403 });
   }
   if (activity.status === "VOIDED") {
     return NextResponse.json({ message: "This record is already removed from active totals." }, { status: 409 });
@@ -41,30 +48,37 @@ export async function POST(
     return NextResponse.json({ message: "A removal request is already waiting for administrator review." }, { status: 409 });
   }
 
-  const removalRequest = await prisma.$transaction(async (transaction) => {
-    const created = await transaction.financialActivityRemovalRequest.create({
-      data: {
+  try {
+    const removalRequest = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.financialActivityRemovalRequest.create({
+        data: {
+          businessId: activity.businessId,
+          activityId: financialActivityId,
+          requestedById: session.userId,
+          reason,
+          previousStatus: activity.status,
+        },
+        select: { id: true, status: true },
+      });
+
+      await appendAuditEntry(transaction, {
         businessId: activity.businessId,
-        activityId: financialActivityId,
-        requestedById: session.userId,
-        reason,
-        previousStatus: activity.status,
-      },
-      select: { id: true, status: true },
+        actorId: session.userId,
+        action: "FINANCIAL_ACTIVITY_REMOVAL_REQUESTED",
+        entityType: "FinancialActivity",
+        entityId: String(activity.id),
+        summary: `Requested removal of money record: ${activity.title}`,
+        metadata: { requestId: created.id, reason },
+      });
+
+      return created;
     });
 
-    await appendAuditEntry(transaction, {
-      businessId: activity.businessId,
-      actorId: session.userId,
-      action: "FINANCIAL_ACTIVITY_REMOVAL_REQUESTED",
-      entityType: "FinancialActivity",
-      entityId: String(activity.id),
-      summary: `Requested removal of money record: ${activity.title}`,
-      metadata: { requestId: created.id, reason },
-    });
-
-    return created;
-  });
-
-  return NextResponse.json({ removalRequest }, { status: 201 });
+    return NextResponse.json({ removalRequest }, { status: 201 });
+  } catch (error: unknown) {
+    if (getErrorCode(error) === "P2002") {
+      return NextResponse.json({ message: "A removal request is already waiting for administrator review." }, { status: 409 });
+    }
+    throw error;
+  }
 }

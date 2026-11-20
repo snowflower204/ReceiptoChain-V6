@@ -62,6 +62,10 @@ CREATE INDEX "financial_activity_removal_requests_business_id_status_created_at_
 CREATE INDEX "financial_activity_removal_requests_activity_id_status_idx"
   ON "financial_activity_removal_requests"("activity_id", "status");
 
+CREATE UNIQUE INDEX "financial_activity_removal_requests_one_pending_per_activity"
+  ON "financial_activity_removal_requests"("activity_id")
+  WHERE "status" = 'PENDING';
+
 CREATE INDEX "financial_activity_removal_requests_requested_by_id_idx"
   ON "financial_activity_removal_requests"("requested_by_id");
 

@@ -11,7 +11,8 @@ export default async function MoneyActivitiesPage({ params }: { params: Promise<
   const activityId = Number((await params).activityId);
   const access = await getEventAccess(session.userId, activityId);
   if (!access) notFound();
-  const canRequestRemoval = access.isAdmin || access.eventRole === "FINANCE_REVIEWER";
+  const canRequestRemoval = access.eventRole === "FINANCE_REVIEWER";
+  const canAddRecord = access.isAdmin || access.eventRole !== "VIEWER";
 
   const records = await prisma.financialActivity.findMany({
     where: { eventId: activityId, status: { not: "VOIDED" } },
@@ -26,7 +27,7 @@ export default async function MoneyActivitiesPage({ params }: { params: Promise<
           <h2 className="text-2xl font-bold">Money activities</h2>
           <p className="mt-1 text-sm text-slate-600">Every amount received or spent, explained in plain language.</p>
         </div>
-        <Link href={`/app/activities/${activityId}/money/new`} className="rounded-full bg-yellow-300 px-5 py-3 text-center text-sm font-bold text-emerald-950 hover:bg-yellow-200">Add money record</Link>
+        {canAddRecord && <Link href={`/app/activities/${activityId}/money/new`} className="rounded-full bg-yellow-300 px-5 py-3 text-center text-sm font-bold text-emerald-950 hover:bg-yellow-200">Add money record</Link>}
       </div>
 
       {records.length === 0 ? (

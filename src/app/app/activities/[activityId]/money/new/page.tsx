@@ -1,13 +1,27 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+
+type BudgetItem = { id: number; name: string; category: string | null };
 
 export default function NewMoneyActivityPage() {
   const router = useRouter();
   const params = useParams<{ activityId: string }>();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/app/activities/${params.activityId}/budget-items`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (active && Array.isArray(data.items)) setBudgetItems(data.items);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [params.activityId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,6 +65,14 @@ export default function NewMoneyActivityPage() {
           <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-bold">Short title</span><input name="title" required placeholder="Example: Registration payment from participant" className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></label>
           <label className="block"><span className="mb-2 block text-sm font-bold">Amount</span><input name="amount" type="number" min="0.01" step="0.01" required placeholder="0.00" className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></label>
           <label className="block"><span className="mb-2 block text-sm font-bold">Person or organization</span><input name="counterparty" placeholder="Who paid or received it?" className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></label>
+          <label className="block sm:col-span-2">
+            <span className="mb-2 block text-sm font-bold">Budget item <span className="font-normal text-slate-400">(optional)</span></span>
+            <select name="budgetItemId" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+              <option value="">Not linked to a budget item</option>
+              {budgetItems.map((item) => <option key={item.id} value={item.id}>{item.category ? `${item.category} — ` : ""}{item.name}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-slate-500">Linking this record updates the planned-versus-actual budget view.</span>
+          </label>
           <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-bold">Payment method <span className="font-normal text-slate-400">(optional)</span></span><input name="paymentMethod" placeholder="Cash, bank transfer, GCash, or another method" className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></label>
           <label className="block sm:col-span-2"><span className="mb-2 block text-sm font-bold">Helpful notes <span className="font-normal text-slate-400">(optional)</span></span><textarea name="description" rows={3} placeholder="Add context that will help the reviewer understand." className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" /></label>
         </div>

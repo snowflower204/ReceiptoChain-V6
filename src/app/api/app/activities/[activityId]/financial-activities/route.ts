@@ -47,9 +47,33 @@ export async function POST(
   const paymentMethod = String(body.paymentMethod ?? "").trim();
   const amount = Number(body.amount);
   const occurredAt = new Date(`${String(body.occurredAt ?? "")}T00:00:00.000Z`);
+  const rawBudgetItemId = String(body.budgetItemId ?? "").trim();
+  const budgetItemId = rawBudgetItemId ? Number(rawBudgetItemId) : null;
 
-  if (!TYPES.includes(type as (typeof TYPES)[number]) || !title || !Number.isFinite(amount) || amount <= 0 || Number.isNaN(occurredAt.getTime())) {
+  if (
+    !TYPES.includes(type as (typeof TYPES)[number]) ||
+    !title ||
+    title.length > 160 ||
+    description.length > 1_000 ||
+    counterparty.length > 160 ||
+    paymentMethod.length > 80 ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    amount > 999_999_999_999.99 ||
+    Number.isNaN(occurredAt.getTime()) ||
+    (budgetItemId !== null && (!Number.isInteger(budgetItemId) || budgetItemId <= 0))
+  ) {
     return NextResponse.json({ message: "Please complete the required money record fields." }, { status: 400 });
+  }
+
+  if (budgetItemId !== null) {
+    const budgetItem = await prisma.eventBudgetItem.findFirst({
+      where: { id: budgetItemId, eventId: activityId, businessId: access.event.businessId },
+      select: { id: true },
+    });
+    if (!budgetItem) {
+      return NextResponse.json({ message: "The selected budget item does not belong to this activity." }, { status: 400 });
+    }
   }
 
   const record = await prisma.$transaction(async (transaction) => {
@@ -57,6 +81,7 @@ export async function POST(
       data: {
         businessId: access.event.businessId,
         eventId: activityId,
+        budgetItemId,
         createdById: session.userId,
         type: type as (typeof TYPES)[number],
         title,
@@ -78,7 +103,7 @@ export async function POST(
       entityType: "FinancialActivity",
       entityId: String(created.id),
       summary: `Created money record: ${created.title}`,
-      metadata: { type: created.type, amount: String(created.amount), status: created.status },
+      metadata: { type: created.type, amount: String(created.amount), status: created.status, budgetItemId },
     });
 
     return created;

@@ -50,7 +50,7 @@ export default async function ActivityLayout({
           </div>
         </div>
       </section>
-      <ActivityNav activityId={activityId} />
+      <ActivityNav activityId={activityId} canManageTeam={access.isAdmin} />
       <div className="mt-5">{children}</div>
     </main>
   );

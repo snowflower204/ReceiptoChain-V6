@@ -31,21 +31,30 @@ export async function POST(
   });
   if (!approvedRemoval) return NextResponse.json({ message: "Approved removal history was not found." }, { status: 409 });
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.financialActivity.update({
-      where: { id: activityId },
-      data: { status: approvedRemoval.previousStatus, voidedById: null, voidedAt: null, voidReason: null, restorableUntil: null },
+  try {
+    await prisma.$transaction(async (transaction) => {
+      const restored = await transaction.financialActivity.updateMany({
+        where: { id: activityId, status: "VOIDED", restorableUntil: { gt: new Date() } },
+        data: { status: approvedRemoval.previousStatus, voidedById: null, voidedAt: null, voidReason: null, restorableUntil: null },
+      });
+      if (restored.count !== 1) throw new Error("RESTORE_WINDOW_CLOSED");
+
+      await appendAuditEntry(transaction, {
+        businessId: activity.businessId,
+        actorId: session.userId,
+        action: "FINANCIAL_ACTIVITY_RESTORED",
+        entityType: "FinancialActivity",
+        entityId: String(activityId),
+        summary: `Restored money record: ${activity.title}`,
+        metadata: { removalRequestId: approvedRemoval.id, restoredStatus: approvedRemoval.previousStatus },
+      });
     });
-    await appendAuditEntry(transaction, {
-      businessId: activity.businessId,
-      actorId: session.userId,
-      action: "FINANCIAL_ACTIVITY_RESTORED",
-      entityType: "FinancialActivity",
-      entityId: String(activityId),
-      summary: `Restored money record: ${activity.title}`,
-      metadata: { removalRequestId: approvedRemoval.id, restoredStatus: approvedRemoval.previousStatus },
-    });
-  });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "RESTORE_WINDOW_CLOSED") {
+      return NextResponse.json({ message: "This record was already restored or its restoration period ended." }, { status: 409 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ success: true });
 }
