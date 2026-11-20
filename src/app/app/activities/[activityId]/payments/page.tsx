@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { EvidenceReviewButtons, EvidenceUploadForm } from "../_components/EvidenceActions";
 
 export default async function PaymentsPage({ params }: { params: Promise<{ activityId: string }> }) {
   const session = await getCurrentSession();
@@ -9,11 +10,27 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
   const activityId = Number((await params).activityId);
   const access = await getEventAccess(session.userId, activityId);
   if (!access) notFound();
+  const canUpload = access.isAdmin || access.eventRole !== "VIEWER";
+  const canReview = access.isAdmin || access.eventRole === "FINANCE_REVIEWER";
 
   const records = await prisma.financialActivity.findMany({
     where: { eventId: activityId, status: { not: "VOIDED" } },
     include: {
-      documents: { orderBy: { createdAt: "desc" } },
+      documents: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          fileName: true,
+          sizeBytes: true,
+          submittedById: true,
+          submittedBy: { select: { email: true } },
+          reviewedBy: { select: { email: true } },
+          reviewNotes: true,
+          createdAt: true,
+        },
+      },
       paymentConfirmations: { include: { confirmedBy: { select: { email: true } } }, orderBy: { confirmedAt: "desc" } },
       receipt: true,
     },
@@ -40,6 +57,25 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
                 </div>
               </div>
               {confirmation && <p className="mt-3 text-xs text-slate-500">Confirmed independently by {confirmation.confirmedBy.email}</p>}
+              {record.documents.length > 0 && (
+                <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                  {record.documents.map((document) => (
+                    <div key={document.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                        <div>
+                          <a href={`/api/app/evidence/${document.id}/file`} target="_blank" rel="noreferrer" className="font-bold text-emerald-800 hover:underline">{document.fileName}</a>
+                          <p className="mt-1 text-xs text-slate-500">{document.kind.replaceAll("_", " ")} · {(document.sizeBytes / 1024).toFixed(0)} KB · submitted by {document.submittedBy?.email ?? "legacy record"}</p>
+                          {document.reviewedBy && <p className="mt-1 text-xs text-slate-500">Reviewed by {document.reviewedBy.email}{document.reviewNotes ? ` · ${document.reviewNotes}` : ""}</p>}
+                        </div>
+                        <span className={`h-fit rounded-full px-3 py-1 text-xs font-bold ${document.status === "ACCEPTED" ? "bg-emerald-100 text-emerald-800" : document.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-900"}`}>{document.status}</span>
+                      </div>
+                      {canReview && document.status === "PENDING" && document.submittedById !== session.userId && <EvidenceReviewButtons documentId={document.id} />}
+                      {canReview && document.status === "PENDING" && document.submittedById === session.userId && <p className="mt-2 text-xs font-semibold text-slate-500">A different administrator or finance reviewer must review this file.</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {canUpload && <EvidenceUploadForm activityId={record.id} />}
             </article>
           );
         })}

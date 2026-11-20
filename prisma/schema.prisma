@@ -21,6 +21,7 @@ model User {
   createdActivities           FinancialActivity[]               @relation("ActivityCreator")
   confirmedActivities         FinancialActivity[]               @relation("ActivityConfirmer")
   reconciledActivities        FinancialActivity[]               @relation("ActivityReconciler")
+  submittedDocuments          EvidenceDocument[]                @relation("DocumentSubmitter")
   reviewedDocuments           EvidenceDocument[]                @relation("DocumentReviewer")
   paymentConfirmations        PaymentConfirmation[]             @relation("PaymentConfirmer")
   requestedReimbursements     ReimbursementRequest[]            @relation("ReimbursementRequester")
@@ -333,6 +334,7 @@ model EvidenceDocument {
   businessId      Int            @map("business_id")
   activityId      Int?           @map("activity_id")
   reimbursementId Int?           @map("reimbursement_id")
+  submittedById   Int?           @map("submitted_by_id")
   reviewedById    Int?           @map("reviewed_by_id")
   kind            DocumentKind
   status          DocumentStatus @default(PENDING)
@@ -341,6 +343,7 @@ model EvidenceDocument {
   mimeType        String         @map("mime_type")
   sizeBytes       Int            @map("size_bytes")
   sha256          String
+  fileData        Bytes?         @map("file_data")
   reviewNotes     String?        @map("review_notes")
   reviewedAt      DateTime?      @map("reviewed_at")
   createdAt       DateTime       @default(now()) @map("created_at")
@@ -349,11 +352,13 @@ model EvidenceDocument {
   business      Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
   activity      FinancialActivity?    @relation(fields: [activityId], references: [id], onDelete: Restrict)
   reimbursement ReimbursementRequest? @relation(fields: [reimbursementId], references: [id], onDelete: Restrict)
+  submittedBy   User?                 @relation("DocumentSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   reviewedBy    User?                 @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([businessId, status])
   @@index([activityId])
   @@index([reimbursementId])
+  @@index([submittedById])
   @@index([sha256])
   @@map("evidence_documents")
 }
