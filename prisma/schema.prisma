@@ -289,7 +289,7 @@ model FinancialActivity {
   reconciledBy            User?                             @relation("ActivityReconciler", fields: [reconciledById], references: [id], onDelete: SetNull)
   voidedBy                User?                             @relation("ActivityVoider", fields: [voidedById], references: [id], onDelete: SetNull)
   documents               EvidenceDocument[]
-  paymentConfirmations    PaymentConfirmation[]
+  paymentConfirmation     PaymentConfirmation?
   receipt                 Receipt?
   reimbursementSettlement ReimbursementRequest?             @relation("ReimbursementSettlement")
   liquidationItems        LiquidationItem[]
@@ -366,7 +366,7 @@ model EvidenceDocument {
 model PaymentConfirmation {
   id            Int      @id @default(autoincrement())
   businessId    Int      @map("business_id")
-  activityId    Int      @map("activity_id")
+  activityId    Int      @unique @map("activity_id")
   confirmedById Int      @map("confirmed_by_id")
   method        String
   provider      String?

@@ -3,6 +3,7 @@ import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { EvidenceReviewButtons, EvidenceUploadForm } from "../_components/EvidenceActions";
+import PaymentConfirmationForm from "../_components/PaymentActions";
 
 export default async function PaymentsPage({ params }: { params: Promise<{ activityId: string }> }) {
   const session = await getCurrentSession();
@@ -31,7 +32,7 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
           createdAt: true,
         },
       },
-      paymentConfirmations: { include: { confirmedBy: { select: { email: true } } }, orderBy: { confirmedAt: "desc" } },
+      paymentConfirmation: { include: { confirmedBy: { select: { email: true } } } },
       receipt: true,
     },
     orderBy: { createdAt: "desc" },
@@ -45,7 +46,9 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
         {records.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Money records will appear here after they are added.</p>}
         {records.map((record) => {
           const evidence = record.documents[0];
-          const confirmation = record.paymentConfirmations[0];
+          const confirmation = record.paymentConfirmation;
+          const hasAcceptedEvidence = record.documents.some((document) => document.status === "ACCEPTED");
+          const mayConfirmThisRecord = canReview && record.createdById !== session.userId;
           return (
             <article key={record.id} className="rounded-2xl border border-slate-200 p-5">
               <div className="flex flex-col justify-between gap-3 md:flex-row">
@@ -56,7 +59,7 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
                   <span className={`rounded-full px-3 py-1 ${record.receipt ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>Receipt: {record.receipt ? "ISSUED" : "NOT ISSUED"}</span>
                 </div>
               </div>
-              {confirmation && <p className="mt-3 text-xs text-slate-500">Confirmed independently by {confirmation.confirmedBy.email}</p>}
+              {confirmation && <p className="mt-3 text-xs text-slate-500">Confirmed independently by {confirmation.confirmedBy.email} · {confirmation.method} · reference {confirmation.reference}</p>}
               {record.documents.length > 0 && (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   {record.documents.map((document) => (
@@ -76,6 +79,9 @@ export default async function PaymentsPage({ params }: { params: Promise<{ activ
                 </div>
               )}
               {canUpload && <EvidenceUploadForm activityId={record.id} />}
+              {!confirmation && mayConfirmThisRecord && hasAcceptedEvidence && <PaymentConfirmationForm activityId={record.id} />}
+              {!confirmation && canReview && !hasAcceptedEvidence && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-500">Payment confirmation unlocks after a different reviewer accepts at least one evidence file.</p>}
+              {!confirmation && canReview && record.createdById === session.userId && hasAcceptedEvidence && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-500">A different administrator or finance reviewer must confirm this money record.</p>}
             </article>
           );
         })}
