@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import { NextRequest, NextResponse } from "next/server";
+import { createInviteHash } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 
 type SignupType =
@@ -10,12 +11,6 @@ type SignupType =
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function createInviteHash(code: string): string {
-  return createHash("sha256")
-    .update(code.trim().toUpperCase())
-    .digest("hex");
 }
 
 function createBusinessSlug(name: string): string {

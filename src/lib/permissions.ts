@@ -6,6 +6,17 @@ export function isBusinessAdmin(role: string): boolean {
   return ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number]);
 }
 
+export async function getBusinessAdminAccess(userId: number, businessId: number) {
+  const membership = await prisma.businessMember.findUnique({
+    where: { userId_businessId: { userId, businessId } },
+    include: { business: true },
+  });
+
+  if (!membership || !isBusinessAdmin(membership.role)) return null;
+
+  return { membership, business: membership.business };
+}
+
 export async function getEventAccess(userId: number, eventId: number) {
   const event = await prisma.businessEvent.findUnique({
     where: { id: eventId },
