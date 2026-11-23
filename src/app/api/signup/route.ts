@@ -1,7 +1,11 @@
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import { NextRequest, NextResponse } from "next/server";
-import { createInviteHash } from "@/lib/invitations";
+import {
+  createInviteHash,
+  isInvitationCodeFormatValid,
+  normalizeInvitationCode,
+} from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 
 type SignupType =
@@ -260,8 +264,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Business-member registration
-    const invitationCode = readString(
-      body.invitationCode
+    const invitationCode = normalizeInvitationCode(
+      readString(body.invitationCode)
     );
 
     if (!invitationCode) {
@@ -269,6 +273,16 @@ export async function POST(request: NextRequest) {
         {
           message:
             "A business invitation code is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isInvitationCodeFormatValid(invitationCode)) {
+      return NextResponse.json(
+        {
+          message:
+            "Enter a valid ReceiptoChain invitation code",
         },
         { status: 400 }
       );
@@ -293,14 +307,43 @@ export async function POST(request: NextRequest) {
         },
       });
 
-    if (
-      !invitation ||
-      !invitation.active ||
-      invitation.usedCount >= invitation.maxUses ||
-      (invitation.expiresAt &&
-        invitation.expiresAt <= now) ||
-      invitation.role === "OWNER"
-    ) {
+    if (!invitation) {
+      console.warn("Business invitation rejected", {
+        reason: "NOT_FOUND",
+        invitationId: null,
+        checkedAt: now.toISOString(),
+      });
+
+      return NextResponse.json(
+        {
+          message:
+            "Invalid or expired invitation code",
+        },
+        { status: 400 }
+      );
+    }
+
+    const rejectionReason = !invitation.active
+      ? "INACTIVE"
+      : invitation.usedCount >= invitation.maxUses
+        ? "USED"
+        : invitation.expiresAt && invitation.expiresAt <= now
+          ? "EXPIRED"
+          : invitation.role === "OWNER"
+            ? "OWNER_ROLE_NOT_ALLOWED"
+            : null;
+
+    if (rejectionReason) {
+      console.warn("Business invitation rejected", {
+        reason: rejectionReason,
+        invitationId: invitation.id,
+        active: invitation.active,
+        usedCount: invitation.usedCount,
+        maxUses: invitation.maxUses,
+        expiresAt: invitation.expiresAt?.toISOString() ?? null,
+        checkedAt: now.toISOString(),
+      });
+
       return NextResponse.json(
         {
           message:
