@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "@/app/sidebar";
 import { toast } from "react-toastify";
+
+
+
 
 interface Transaction {
   transactionID: number;
@@ -19,7 +22,7 @@ interface Transaction {
   lastName: string;
 }
 
-const TransactionHistoryPage = () => {
+const TransactionHistoryContent = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,4 +100,12 @@ const TransactionHistoryPage = () => {
   );
 };
 
-export default TransactionHistoryPage;
+
+export default function TransactionHistoryPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading transaction history...</div>}>
+      <TransactionHistoryContent />
+    </Suspense>
+  );
+}
+

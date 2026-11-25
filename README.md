@@ -1,3 +1,13 @@
+# Real application and isolated demo
+
+The original ReceiptoChain website is restored at `/`. Existing real application routes remain available with their original implementation.
+
+The entrepreneurship prototype is preserved separately at **`/demo`**. Its pages, components, styles, and browser-local state code live in `src/app/demo`. See [the demo guide](src/app/demo/README.md) for setup, scenarios, storage migration, and tests. Demo actions never call the real APIs.
+
+No Neon or Prisma changes are included. Vercel automatic Git deployment remains disabled for `entrep-101`; this branch is for review.
+
+---
+
 # ReceiptoChain
 
 ReceiptoChain is a secure, real-time receipt monitoring system built for students and institutions. It ensures transparent and verifiable transactions by integrating QR code verification and blockchain-like receipt chaining.
@@ -42,4 +52,3 @@ ReceiptoChain is a secure, real-time receipt monitoring system built for student
 ### Prerequisites
 - Node.js and npm
 - MySQL server
-
