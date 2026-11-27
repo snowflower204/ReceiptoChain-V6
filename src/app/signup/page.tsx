@@ -45,10 +45,6 @@ export default function SignupPage() {
   const [timezone, setTimezone] =
     useState("Asia/Manila");
 
-  // Business-member field
-  const [invitationCode, setInvitationCode] =
-    useState("");
-
   const [showPassword, setShowPassword] =
     useState(false);
   const [loading, setLoading] = useState(false);
@@ -89,10 +85,6 @@ export default function SignupPage() {
       requestBody.countryCode = countryCode;
       requestBody.defaultCurrency = defaultCurrency;
       requestBody.timezone = timezone;
-    }
-
-    if (accountType === "BUSINESS_MEMBER") {
-      requestBody.invitationCode = invitationCode;
     }
 
     try {
@@ -184,7 +176,7 @@ export default function SignupPage() {
                   accountType === "BUSINESS_MEMBER"
                 }
                 title="Staff Member"
-                description="Join using an invitation"
+                description="Join an activity after signing in"
                 onClick={() =>
                   setAccountType("BUSINESS_MEMBER")
                 }
@@ -425,33 +417,9 @@ export default function SignupPage() {
           )}
 
           {accountType === "BUSINESS_MEMBER" && (
-            <section className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-              <label
-                htmlFor="invitationCode"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
-                Business invitation code
-              </label>
-
-              <input
-                id="invitationCode"
-                type="text"
-                value={invitationCode}
-                onChange={(event) =>
-                  setInvitationCode(
-                    event.target.value.toUpperCase()
-                  )
-                }
-                required
-                placeholder="Enter the code from your business"
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 uppercase text-slate-900 outline-none focus:border-blue-500"
-              />
-
-              <p className="mt-2 text-xs text-slate-600">
-                Ask the business owner or administrator
-                for an invitation code.
-              </p>
-            </section>
+            <p className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-slate-700">
+              No code is needed to create your account. After signing in, use your activity code under Join an activity.
+            </p>
           )}
 
           {message && (

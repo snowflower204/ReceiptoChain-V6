@@ -1,11 +1,6 @@
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createInviteHash,
-  isInvitationCodeFormatValid,
-  normalizeInvitationCode,
-} from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 
 type SignupType =
@@ -132,8 +127,8 @@ export async function POST(request: NextRequest) {
     // The 12 below is the bcrypt security cost.
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Customer registration
-    if (accountType === "CUSTOMER") {
+    // Creating a staff account grants no business or activity access.
+    if (accountType !== "BUSINESS_OWNER") {
       const user = await prisma.user.create({
         data: {
           email,
@@ -150,7 +145,9 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           message:
-            "Customer account created successfully",
+            accountType === "BUSINESS_MEMBER"
+              ? "Staff account created. Sign in to join an activity with your code."
+              : "Customer account created successfully",
           account: user,
         },
         { status: 201 }
@@ -158,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Business-owner registration
-    if (accountType === "BUSINESS_OWNER") {
+    {
       const businessName = readString(body.businessName);
       const legalName = readString(body.legalName);
 
@@ -263,182 +260,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Business-member registration
-    const invitationCode = normalizeInvitationCode(
-      readString(body.invitationCode)
-    );
 
-    if (!invitationCode) {
-      return NextResponse.json(
-        {
-          message:
-            "A business invitation code is required",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!isInvitationCodeFormatValid(invitationCode)) {
-      return NextResponse.json(
-        {
-          message:
-            "Enter a valid ReceiptoChain invitation code",
-        },
-        { status: 400 }
-      );
-    }
-
-    const codeHash = createInviteHash(invitationCode);
-    const now = new Date();
-
-    const invitation =
-      await prisma.businessInvitation.findUnique({
-        where: {
-          codeHash,
-        },
-        include: {
-          business: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
-        },
-      });
-
-    if (!invitation) {
-      console.warn("Business invitation rejected", {
-        reason: "NOT_FOUND",
-        invitationId: null,
-        checkedAt: now.toISOString(),
-      });
-
-      return NextResponse.json(
-        {
-          message:
-            "Invalid or expired invitation code",
-        },
-        { status: 400 }
-      );
-    }
-
-    const rejectionReason = !invitation.active
-      ? "INACTIVE"
-      : invitation.usedCount >= invitation.maxUses
-        ? "USED"
-        : invitation.expiresAt && invitation.expiresAt <= now
-          ? "EXPIRED"
-          : invitation.role === "OWNER"
-            ? "OWNER_ROLE_NOT_ALLOWED"
-            : null;
-
-    if (rejectionReason) {
-      console.warn("Business invitation rejected", {
-        reason: rejectionReason,
-        invitationId: invitation.id,
-        active: invitation.active,
-        usedCount: invitation.usedCount,
-        maxUses: invitation.maxUses,
-        expiresAt: invitation.expiresAt?.toISOString() ?? null,
-        checkedAt: now.toISOString(),
-      });
-
-      return NextResponse.json(
-        {
-          message:
-            "Invalid or expired invitation code",
-        },
-        { status: 400 }
-      );
-    }
-
-    const result = await prisma.$transaction(
-      async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            email,
-            passwordHash,
-          },
-          select: {
-            id: true,
-            email: true,
-            platformRole: true,
-          },
-        });
-
-        const claimedInvitation =
-          await tx.businessInvitation.updateMany({
-            where: {
-              id: invitation.id,
-              active: true,
-              usedCount: {
-                lt: invitation.maxUses,
-              },
-              OR: [
-                {
-                  expiresAt: null,
-                },
-                {
-                  expiresAt: {
-                    gt: now,
-                  },
-                },
-              ],
-            },
-            data: {
-              usedCount: {
-                increment: 1,
-              },
-              active:
-                invitation.usedCount + 1 <
-                invitation.maxUses,
-            },
-          });
-
-        if (claimedInvitation.count !== 1) {
-          throw new Error(
-            "INVITATION_UNAVAILABLE"
-          );
-        }
-
-        await tx.businessMember.create({
-          data: {
-            userId: user.id,
-            businessId: invitation.businessId,
-            role: invitation.role,
-          },
-        });
-
-        return user;
-      }
-    );
-
-    return NextResponse.json(
-      {
-        success: true,
-        message:
-          "Business member account created successfully",
-        account: result,
-        business: invitation.business,
-      },
-      { status: 201 }
-    );
   } catch (error: unknown) {
     console.error("Signup error:", error);
 
-    if (
-      error instanceof Error &&
-      error.message === "INVITATION_UNAVAILABLE"
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            "This invitation is no longer available",
-        },
-        { status: 409 }
-      );
-    }
 
     if (getErrorCode(error) === "P2002") {
       return NextResponse.json(
