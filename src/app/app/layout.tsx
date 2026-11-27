@@ -28,6 +28,7 @@ export default async function WorkspaceLayout({
           </Link>
 
           <div className="flex items-center gap-3">
+            <Link href="/app/my-events" className="text-sm font-semibold text-emerald-900">My Events</Link>
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-slate-800">{session.user.email}</p>
               <p className="text-xs text-slate-500">Signed in securely</p>

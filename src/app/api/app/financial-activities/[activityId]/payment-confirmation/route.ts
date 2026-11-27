@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { appendAuditEntry } from "@/lib/audit";
 import { getCurrentSession } from "@/lib/auth";
@@ -29,6 +30,7 @@ export async function POST(
       title: true,
       amount: true,
       status: true,
+      customerRegistration: { select: { user: { select: { email: true } } } },
       documents: { where: { status: "ACCEPTED" }, select: { id: true }, take: 1 },
       paymentConfirmation: { select: { id: true } },
     },
@@ -84,6 +86,18 @@ export async function POST(
         },
         select: { id: true, method: true, provider: true, reference: true, confirmedAt: true },
       });
+
+      if (activity.customerRegistration) {
+        const publicToken = randomUUID();
+        await transaction.receipt.create({
+          data: {
+            businessId: activity.businessId, eventId: activity.eventId, activityId,
+            issuedById: session.userId, receiptNumber: `EVT-${activity.eventId}-${activityId}`,
+            recipientEmail: activity.customerRegistration.user.email, publicToken,
+            verificationHash: createHash("sha256").update(publicToken).digest("hex"),
+          },
+        });
+      }
 
       await appendAuditEntry(transaction, {
         businessId: activity.businessId,

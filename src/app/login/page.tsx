@@ -30,7 +30,8 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        router.push('/app/activities');
+        const next = new URLSearchParams(window.location.search).get('next');
+        router.push(next && /^\/event-registration\/\d+$/.test(next) ? next : '/app/activities');
       } else {
         // Error — show error message
         alert(data.message || 'Login failed. Please try again.');
