@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
 import ActivityNav from "./_components/ActivityNav";
+import { prisma } from "@/lib/prisma";
 
 function readableRole(role: string) {
   return role.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -24,6 +25,12 @@ export default async function ActivityLayout({
 
   const access = await getEventAccess(session.userId, activityId);
   if (!access) notFound();
+  const cash = await prisma.financialActivity.findMany({
+    where: { eventId: activityId, status: { in: ["CONFIRMED", "RECONCILED"] }, type: { in: ["INCOME", "EXPENSE", "REFUND", "REIMBURSEMENT"] } },
+    select: { type: true, paymentConfirmation: { select: { amount: true } } },
+  });
+  const balance = cash.reduce((cents, record) => cents + (record.type === "INCOME" ? 1 : -1) *
+    Math.round(Number(record.paymentConfirmation?.amount ?? 0) * 100), 0) / 100;
 
   const role = access.isAdmin
     ? access.businessRole ?? "ADMIN"
@@ -43,10 +50,11 @@ export default async function ActivityLayout({
             <p className="mt-1 text-sm text-slate-600">{access.event.business.name}</p>
           </div>
           <div className="rounded-2xl bg-white px-5 py-3 text-sm shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planned budget</p>
-            <p className="mt-1 text-xl font-bold text-emerald-900">
-              {new Intl.NumberFormat("en-PH", { style: "currency", currency: access.event.currency }).format(Number(access.event.budgetTotal))}
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmed activity balance</p>
+            <p className="mt-1 text-4xl font-black tabular-nums text-emerald-900">
+              {new Intl.NumberFormat("en-PH", { style: "currency", currency: access.event.currency }).format(balance)}
             </p>
+            <p className="mt-1 text-xs text-slate-500">Confirmed money in minus money out</p>
           </div>
         </div>
       </section>
