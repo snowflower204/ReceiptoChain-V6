@@ -33,6 +33,7 @@ model User {
   includedLiquidationItems    LiquidationItem[]                 @relation("LiquidationItemIncluder")
   eventAssignments            BusinessEventMember[]             @relation("EventAssignee")
   assignedEventMembers        BusinessEventMember[]             @relation("EventAssigner")
+  issuedActivityInvitations   ActivityInvitation[]              @relation("ActivityInviteIssuer")
   voidedActivities            FinancialActivity[]               @relation("ActivityVoider")
   requestedActivityRemovals   FinancialActivityRemovalRequest[] @relation("RemovalRequester")
   reviewedActivityRemovals    FinancialActivityRemovalRequest[] @relation("RemovalReviewer")
@@ -208,11 +209,27 @@ model BusinessEvent {
   receipts           Receipt[]
   liquidationReports LiquidationReport[]
   members            BusinessEventMember[]
+  invitations        ActivityInvitation[]
 
   @@unique([businessId, slug])
   @@index([businessId, status])
   @@index([businessId, startsAt])
   @@map("business_events")
+}
+
+model ActivityInvitation {
+  id         Int       @id @default(autoincrement())
+  eventId    Int       @map("event_id")
+  issuedById Int       @map("issued_by_id")
+  codeHash   String    @unique @map("code_hash")
+  redeemedAt DateTime? @map("redeemed_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  event    BusinessEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  issuedBy User          @relation("ActivityInviteIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+
+  @@index([eventId])
+  @@map("activity_invitations")
 }
 
 model BusinessEventMember {

@@ -4,6 +4,7 @@ import { getEventAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import InvitationManager from "../_components/InvitationManager";
 import TeamManager from "../_components/TeamManager";
+import ActivityInviteControls from "../../ActivityInviteControls";
 
 export default async function ActivityTeamPage({ params }: { params: Promise<{ activityId: string }> }) {
   const session = await getCurrentSession();
@@ -28,6 +29,7 @@ export default async function ActivityTeamPage({ params }: { params: Promise<{ a
 
   return (
     <div className="space-y-5">
+      {access.businessRole === "OWNER" && <ActivityInviteControls activityId={activityId} status={access.event.status} />}
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <h2 className="text-2xl font-bold">Business invitations</h2>
         <p className="mt-1 text-sm text-slate-600">Invite someone into the business before assigning them to this activity.</p>

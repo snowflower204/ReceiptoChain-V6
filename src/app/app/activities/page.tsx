@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { isBusinessAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import ActivityInviteControls from "./ActivityInviteControls";
 
 function readableRole(role: string) {
   return role.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -67,6 +68,8 @@ export default async function ActivitiesPage() {
           )}
         </div>
       </section>
+
+      <ActivityInviteControls />
 
       <div className="mt-8 flex items-center justify-between">
         <div>
