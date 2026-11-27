@@ -121,7 +121,8 @@ export default function SignupPage() {
       );
 
       setTimeout(() => {
-        router.push("/login");
+        const next = new URLSearchParams(window.location.search).get("next");
+        router.push(next && /^\/event-registration\/\d+$/.test(next) ? `/login?next=${next}` : "/login");
       }, 1200);
     } catch (error: unknown) {
       setIsError(true);

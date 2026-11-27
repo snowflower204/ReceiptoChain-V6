@@ -36,6 +36,7 @@ model User {
   voidedActivities            FinancialActivity[]               @relation("ActivityVoider")
   requestedActivityRemovals   FinancialActivityRemovalRequest[] @relation("RemovalRequester")
   reviewedActivityRemovals    FinancialActivityRemovalRequest[] @relation("RemovalReviewer")
+  customerRegistrations       CustomerRegistration[]
 
   @@map("users")
 }
@@ -197,6 +198,9 @@ model BusinessEvent {
   status      EventStatus @default(DRAFT)
   currency    String      @default("PHP") @db.VarChar(3)
   budgetTotal Decimal     @default(0) @map("budget_total") @db.Decimal(14, 2)
+  customerFee Decimal?    @map("customer_fee") @db.Decimal(14, 2)
+  customerPaymentInstructions String? @map("customer_payment_instructions")
+  customerRegistrationClosedAt DateTime? @map("customer_registration_closed_at")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
@@ -208,11 +212,28 @@ model BusinessEvent {
   receipts           Receipt[]
   liquidationReports LiquidationReport[]
   members            BusinessEventMember[]
+  customerRegistrations CustomerRegistration[]
 
   @@unique([businessId, slug])
   @@index([businessId, status])
   @@index([businessId, startsAt])
   @@map("business_events")
+}
+
+model CustomerRegistration {
+  eventId     Int      @map("event_id")
+  userId      Int      @map("user_id")
+  amount      Decimal  @db.Decimal(14, 2)
+  currency    String   @db.VarChar(3)
+  activityId  Int?     @unique @map("activity_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  event       BusinessEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  user        User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  activity    FinancialActivity? @relation(fields: [activityId], references: [id], onDelete: Restrict)
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("customer_registrations")
 }
 
 model BusinessEventMember {
@@ -294,6 +315,7 @@ model FinancialActivity {
   reimbursementSettlement ReimbursementRequest?             @relation("ReimbursementSettlement")
   liquidationItems        LiquidationItem[]
   removalRequests         FinancialActivityRemovalRequest[]
+  customerRegistration    CustomerRegistration?
 
   @@index([businessId, eventId])
   @@index([businessId, status])
