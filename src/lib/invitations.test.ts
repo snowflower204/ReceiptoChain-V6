@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { generateActivityInvitationCode } from "./activity-invitations";
 import {
   createInviteHash,
   generateInvitationCode,
@@ -48,4 +49,24 @@ test("rejects malformed invitation code formats", () => {
 
 test("generates codes accepted by the validator", () => {
   assert.equal(isInvitationCodeFormatValid(generateInvitationCode()), true);
+});
+
+test("generates an activity label and three readable random groups", () => {
+  assert.match(
+    generateActivityInvitationCode("AI Hackathon"),
+    /^AIHACKATHON(?:-[2-9A-HJKMNP-Z]{6}){3}$/,
+  );
+});
+
+test("handles accents, missing ASCII labels, and long activity names", () => {
+  assert.match(generateActivityInvitationCode("Café Night"), /^CAFENIGHT-/);
+  assert.match(generateActivityInvitationCode("🎉"), /^ACTIVITY-/);
+  assert.equal(generateActivityInvitationCode("A".repeat(100)).split("-")[0].length, 24);
+});
+
+test("generates a fresh suffix for the same activity", () => {
+  assert.notEqual(
+    generateActivityInvitationCode("AI Hackathon"),
+    generateActivityInvitationCode("AI Hackathon"),
+  );
 });
