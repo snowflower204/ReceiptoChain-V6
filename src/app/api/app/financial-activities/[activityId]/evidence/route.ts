@@ -51,6 +51,8 @@ export async function POST(
   const formData = await request.formData();
   const fileValue = formData.get("file");
   const kind = String(formData.get("kind") ?? "PAYMENT_EVIDENCE");
+  const receiptReference = String(formData.get("receiptReference") ?? "").trim();
+  if (receiptReference.length > 120) return NextResponse.json({ message: "Receipt reference must be at most 120 characters." }, { status: 400 });
   if (!(fileValue instanceof File) || !(DOCUMENT_KINDS as readonly string[]).includes(kind)) {
     return NextResponse.json({ message: "Choose a valid evidence file and document type." }, { status: 400 });
   }
@@ -73,6 +75,7 @@ export async function POST(
         activityId,
         submittedById: session.userId,
         kind: kind as DocumentKind,
+        receiptReference: receiptReference || null,
         status: "PENDING",
         fileName,
         storageKey,

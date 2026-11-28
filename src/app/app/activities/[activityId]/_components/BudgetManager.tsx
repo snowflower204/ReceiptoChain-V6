@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type BudgetItem = { id: number; name: string; category: string | null; plannedAmount: number; actualAmount: number };
+type BudgetItem = { id: number; name: string; category: string | null; plannedAmount: number; quantity: number; notes: string | null };
 
 export default function BudgetManager({ activityId, currency, items, canEdit, canDelete }: { activityId: number; currency: string; items: BudgetItem[]; canEdit: boolean; canDelete: boolean }) {
   const router = useRouter();
@@ -32,18 +32,42 @@ export default function BudgetManager({ activityId, currency, items, canEdit, ca
     if (response.ok) router.refresh();
   }
 
-  return (
-    <div className="space-y-5">
-      {canEdit && <form action={add} className="grid gap-3 rounded-2xl bg-yellow-50 p-4 sm:grid-cols-[1fr_1fr_180px_auto]"><input name="name" required placeholder="Budget item" className="rounded-xl border border-yellow-200 bg-white px-4 py-3 text-sm"/><input name="category" placeholder="Category" className="rounded-xl border border-yellow-200 bg-white px-4 py-3 text-sm"/><input name="plannedAmount" required type="number" min="0" step="0.01" placeholder="Planned amount" className="rounded-xl border border-yellow-200 bg-white px-4 py-3 text-sm"/><button className="rounded-full bg-emerald-900 px-5 py-3 text-sm font-bold text-white">Add item</button></form>}
-      {message && <p className="text-sm font-semibold text-slate-600">{message}</p>}
-      <div className="space-y-3">
-        {items.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No detailed budget items yet.</p>}
-        {items.map((item) => editingId === item.id ? (
-          <form key={item.id} action={(data) => update(item.id, data)} className="grid gap-3 rounded-2xl border border-emerald-300 p-4 sm:grid-cols-[1fr_1fr_180px_auto]"><input name="name" defaultValue={item.name} required className="rounded-xl border border-slate-300 px-3 py-2"/><input name="category" defaultValue={item.category ?? ""} className="rounded-xl border border-slate-300 px-3 py-2"/><input name="plannedAmount" type="number" min="0" step="0.01" defaultValue={item.plannedAmount} required className="rounded-xl border border-slate-300 px-3 py-2"/><div className="flex gap-2"><button className="text-sm font-bold text-emerald-800">Save</button><button type="button" onClick={() => setEditingId(null)} className="text-sm font-bold text-slate-500">Cancel</button></div></form>
-        ) : (
-          <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 p-4 sm:grid-cols-[1fr_160px_160px_auto] sm:items-center"><div><p className="font-bold">{item.name}</p><p className="text-xs text-slate-500">{item.category || "Uncategorized"}</p></div><div><p className="text-xs text-slate-500">Planned</p><p className="font-bold">{format(item.plannedAmount)}</p></div><div><p className="text-xs text-slate-500">Actual</p><p className="font-bold">{format(item.actualAmount)}</p></div><div className="flex gap-3">{canEdit && <button type="button" onClick={() => setEditingId(item.id)} className="text-xs font-bold text-emerald-800">Edit</button>}{canDelete && <button type="button" onClick={() => remove(item.id)} className="text-xs font-bold text-red-700">Remove</button>}</div></div>
-        ))}
-      </div>
+  const groups = new Map<string, BudgetItem[]>();
+  for (const item of items) {
+    const label = item.category || "Uncategorized";
+    groups.set(label, [...(groups.get(label) ?? []), item]);
+  }
+  const field = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm";
+  const fields = (item?: BudgetItem) => <>
+    <label>Item<input name="name" required maxLength={120} defaultValue={item?.name} className={field + " block w-full"}/></label>
+    <label>Category<input name="category" list="budget-categories" maxLength={80} defaultValue={item?.category ?? ""} placeholder="Choose or type a category" className={field + " block w-full"}/></label>
+    <label>Amount per unit<input name="unitPrice" type="number" min="0" step="0.01" required defaultValue={item ? (item.plannedAmount / item.quantity).toFixed(2) : ""} className={field + " block w-full"}/></label>
+    <label>Quantity<input name="quantity" type="number" min="1" max="1000000" step="1" required defaultValue={item?.quantity ?? 1} className={field + " block w-full"}/></label>
+    <label>Note<input name="notes" maxLength={500} defaultValue={item?.notes ?? ""} className={field + " block w-full"}/></label>
+  </>;
+
+  return <div className="space-y-5">
+    <div className="rounded-2xl bg-emerald-50 p-5">
+      <p className="text-sm font-semibold text-emerald-900">Total planned expenses</p>
+      <p className="text-3xl font-black text-emerald-950">{format(items.reduce((sum, item) => sum + item.plannedAmount, 0))}</p>
     </div>
-  );
+    <datalist id="budget-categories">{[...groups.keys()].map((name) => <option key={name} value={name}/>)}</datalist>
+    {canEdit && <form action={add} className="grid gap-3 rounded-2xl bg-yellow-50 p-4 sm:grid-cols-3">
+      {fields()}<button className="self-end rounded-full bg-emerald-900 px-5 py-3 font-bold text-white">Add budget item</button>
+    </form>}
+    {message && <p role="status" className="text-sm font-semibold text-slate-600">{message}</p>}
+    {items.length === 0 && <p className="text-sm text-slate-500">Add an item to create your first category card.</p>}
+    {[...groups].map(([category, rows]) => <details key={category} className="rounded-2xl border border-emerald-100 bg-white">
+      <summary className="cursor-pointer rounded-2xl bg-emerald-50 p-5 font-bold text-emerald-950">{category} · {format(rows.reduce((sum, row) => sum + row.plannedAmount, 0))} planned</summary>
+      <div className="overflow-x-auto p-4"><table className="w-full text-left text-sm">
+        <thead><tr>{["Item", "Amount per unit", "Quantity", "Subtotal", "Note", "Actions"].map((label) => <th key={label} scope="col" className="p-2">{label}</th>)}</tr></thead>
+        <tbody>{rows.map((item) => editingId === item.id ? <tr key={item.id}><td colSpan={6}><form action={(data) => update(item.id, data)} className="grid gap-3 p-3 sm:grid-cols-3">
+          {fields()}<div className="flex gap-3"><button className="font-bold text-emerald-800">Save</button><button type="button" onClick={() => setEditingId(null)}>Cancel</button></div>
+        </form></td></tr> : <tr key={item.id} className="border-t border-slate-100">
+          <th scope="row" className="p-2">{item.name}</th><td className="p-2">{format(item.plannedAmount / item.quantity)}</td><td className="p-2">{item.quantity}</td><td className="p-2">{format(item.plannedAmount)}</td><td className="p-2">{item.notes || "—"}</td>
+          <td className="p-2">{canEdit && <button type="button" onClick={() => setEditingId(item.id)} className="mr-3 font-bold text-emerald-800">Edit</button>}{canDelete && <button type="button" onClick={() => remove(item.id)} className="font-bold text-red-700">Remove</button>}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </details>)}
+  </div>;
 }

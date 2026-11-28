@@ -258,6 +258,7 @@ model EventBudgetItem {
   eventId       Int      @map("event_id")
   name          String
   category      String?
+  quantity      Int      @default(1)
   plannedAmount Decimal  @map("planned_amount") @db.Decimal(14, 2)
   notes         String?
   createdAt     DateTime @default(now()) @map("created_at")
@@ -347,6 +348,7 @@ model FinancialActivityRemovalRequest {
 /// Evidence attachment and tenant ownership invariants are enforced by the
 /// harden_mvp_finance_integrity SQL migration.
 model EvidenceDocument {
+  receiptReference String? @map("receipt_reference")
   id              Int            @id @default(autoincrement())
   businessId      Int            @map("business_id")
   activityId      Int?           @map("activity_id")

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { appendAuditEntry } from "@/lib/audit";
 import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
+import { readBudgetAmount } from "@/lib/budget-amount";
 import { prisma } from "@/lib/prisma";
 
 function canEditBudget(access: NonNullable<Awaited<ReturnType<typeof getEventAccess>>>) {
@@ -23,11 +24,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json();
   const name = String(body.name ?? "").trim();
   const category = String(body.category ?? "").trim();
-  const plannedAmount = Number(body.plannedAmount);
+  const notes = String(body.notes ?? "").trim();
+  const { plannedAmount, quantity } = readBudgetAmount(body);
   if (
     !name ||
     name.length > 120 ||
     category.length > 80 ||
+    notes.length > 500 ||
     !Number.isFinite(plannedAmount) ||
     plannedAmount < 0 ||
     plannedAmount > 999_999_999_999.99
@@ -36,7 +39,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const item = await prisma.$transaction(async (transaction) => {
-    const updated = await transaction.eventBudgetItem.update({ where: { id: budgetItemId }, data: { name, category: category || null, plannedAmount } });
+    const updated = await transaction.eventBudgetItem.update({ where: { id: budgetItemId }, data: { name, category: category || null, plannedAmount, quantity, notes: notes || null } });
     await appendAuditEntry(transaction, {
       businessId: access.event.businessId,
       actorId: session.userId,

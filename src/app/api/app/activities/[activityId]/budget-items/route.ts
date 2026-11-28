@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { appendAuditEntry } from "@/lib/audit";
 import { getCurrentSession } from "@/lib/auth";
 import { getEventAccess } from "@/lib/permissions";
+import { readBudgetAmount } from "@/lib/budget-amount";
 import { prisma } from "@/lib/prisma";
 
 function canEditBudget(access: NonNullable<Awaited<ReturnType<typeof getEventAccess>>>) {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const name = String(body.name ?? "").trim();
   const category = String(body.category ?? "").trim();
   const notes = String(body.notes ?? "").trim();
-  const plannedAmount = Number(body.plannedAmount);
+  const { plannedAmount, quantity } = readBudgetAmount(body);
   if (
     !name ||
     name.length > 120 ||
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const item = await prisma.$transaction(async (transaction) => {
     const created = await transaction.eventBudgetItem.create({
-      data: { businessId: access.event.businessId, eventId: activityId, name, category: category || null, plannedAmount, notes: notes || null },
+      data: { businessId: access.event.businessId, eventId: activityId, name, category: category || null, plannedAmount, quantity, notes: notes || null },
     });
     await appendAuditEntry(transaction, {
       businessId: access.event.businessId,

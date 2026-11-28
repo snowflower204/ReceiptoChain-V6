@@ -15,10 +15,10 @@ export default async function ActivityOverview({ params }: { params: Promise<{ a
   const access = await getEventAccess(session.userId, activityId);
   if (!access) notFound();
 
-  const [records, evidencePending, removalPending, reports] = await Promise.all([
+  const [records, evidencePending, removalPending, reports, receiptsCollected] = await Promise.all([
     prisma.financialActivity.findMany({
       where: { eventId: activityId, status: { not: "VOIDED" } },
-      select: { type: true, amount: true, status: true },
+      select: { type: true, status: true, paymentConfirmation: { select: { amount: true } } },
     }),
     prisma.evidenceDocument.count({
       where: { activity: { eventId: activityId }, status: "PENDING" },
@@ -27,13 +27,16 @@ export default async function ActivityOverview({ params }: { params: Promise<{ a
       where: { activity: { eventId: activityId }, status: "PENDING" },
     }),
     prisma.liquidationReport.count({ where: { eventId: activityId } }),
+    prisma.evidenceDocument.count({ where: { activity: { eventId: activityId, status: { not: "VOIDED" } }, kind: { in: ["OFFICIAL_RECEIPT", "EXPENSE_RECEIPT", "SALES_INVOICE"] } } }),
   ]);
 
-  const income = records.filter((item) => item.type === "INCOME").reduce((sum, item) => sum + Number(item.amount), 0);
-  const expenses = records.filter((item) => ["EXPENSE", "REFUND", "REIMBURSEMENT"].includes(item.type)).reduce((sum, item) => sum + Number(item.amount), 0);
+  const cleared = records.filter((item) => item.status === "CONFIRMED" || item.status === "RECONCILED");
+  const income = cleared.filter((item) => item.type === "INCOME").reduce((sum, item) => sum + Number(item.paymentConfirmation?.amount ?? 0), 0);
+  const expenses = cleared.filter((item) => ["EXPENSE", "REFUND", "REIMBURSEMENT"].includes(item.type)).reduce((sum, item) => sum + Number(item.paymentConfirmation?.amount ?? 0), 0);
   const reconciled = records.filter((item) => item.status === "RECONCILED").length;
 
   const cards = [
+    { label: "Receipts collected", value: String(receiptsCollected), helper: "Uploaded receipts and sales invoices, including those awaiting review" },
     { label: "Money received", value: money(income, access.event.currency), helper: "Confirmed income recorded" },
     { label: "Money spent", value: money(expenses, access.event.currency), helper: "Expenses and reimbursements" },
     { label: "Matched records", value: `${reconciled} of ${records.length}`, helper: "Reconciled with actual payments" },
