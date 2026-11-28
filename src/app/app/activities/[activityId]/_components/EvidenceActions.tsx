@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
-export function EvidenceUploadForm({ activityId }: { activityId: number }) {
+export function EvidenceUploadForm({ activityId, receipt = false }: { activityId: number; receipt?: boolean }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
@@ -30,7 +30,7 @@ export function EvidenceUploadForm({ activityId }: { activityId: number }) {
     <form ref={formRef} onSubmit={submit} className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 md:grid-cols-[180px_1fr_auto] md:items-end">
       <label className="block">
         <span className="mb-1 block text-xs font-bold text-slate-600">Document type</span>
-        <select name="kind" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+        <select name="kind" defaultValue={receipt ? "EXPENSE_RECEIPT" : "PAYMENT_EVIDENCE"} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
           <option value="PAYMENT_EVIDENCE">Payment evidence</option>
           <option value="EXPENSE_RECEIPT">Expense receipt</option>
           <option value="OFFICIAL_RECEIPT">Official receipt</option>
@@ -43,6 +43,7 @@ export function EvidenceUploadForm({ activityId }: { activityId: number }) {
         <span className="mb-1 block text-xs font-bold text-slate-600">PDF, PNG, or JPEG · up to 2 MB</span>
         <input name="file" type="file" accept="application/pdf,image/png,image/jpeg" required className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-bold file:text-emerald-900" />
       </label>
+      <label className="block text-xs font-bold text-slate-600">Receipt number (optional)<input name="receiptReference" maxLength={120} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>
       <button disabled={saving} className="rounded-full bg-emerald-900 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Submitting…" : "Submit proof"}</button>
       {message && <p role="status" className="text-xs font-semibold text-slate-600 md:col-span-3">{message}</p>}
     </form>

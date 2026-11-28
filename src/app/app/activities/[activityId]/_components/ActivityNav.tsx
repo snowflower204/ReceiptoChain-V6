@@ -7,7 +7,8 @@ const items = [
   { suffix: "", label: "Overview" },
   { suffix: "/budget", label: "Budget" },
   { suffix: "/money", label: "Money activities" },
-  { suffix: "/payments", label: "Payments & receipts" },
+  { suffix: "/receipts", label: "Receipts" },
+  { suffix: "/payments", label: "Payment review" },
   { suffix: "/reconciliation", label: "Reconciliation" },
   { suffix: "/liquidation", label: "Liquidation report" },
 ];
